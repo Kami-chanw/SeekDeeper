@@ -4,24 +4,23 @@ import os
 from tqdm import tqdm
 
 url = "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
-download_path = "./dataset"
-extract_to = "./dataset"
-delete_original = True
+download_path = "."
+extract_to = "."
 
 os.makedirs(download_path, exist_ok=True)
-file_name = url.split('/')[-1]
+file_name = url.split("/")[-1]
 file_path = os.path.join(download_path, file_name)
 
 if not os.path.exists(file_path):
-    print("Start downloading IMDB dataset...")
+    print("Start downloading IMDB datasets...")
     response = requests.head(url)
-    file_size = int(response.headers.get('content-length', 0))
+    file_size = int(response.headers.get("content-length", 0))
 
     response = requests.get(url, stream=True)
-    with open(file_path, 'wb') as f, tqdm(
+    with open(file_path, "wb") as f, tqdm(
         desc=file_path,
         total=file_size,
-        unit='B',
+        unit="B",
         unit_scale=True,
         unit_divisor=1024,
     ) as bar:
@@ -43,7 +42,3 @@ with tarfile.open(file_path, "r:*") as tar:
             tar.extract(member, path=extract_to)
             bar.update(1)
 print(f"Extracted to {extract_to}")
-
-if delete_original:
-    os.remove(file_path)
-    print(f"Deleted original archive {file_path}")

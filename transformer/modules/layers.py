@@ -69,7 +69,7 @@ class MultiheadAttention(nn.Module):
         # 1. Linear projections, [batch_size, length, d_model]
         q, k, v = self.w_q(q), self.w_k(k), self.w_v(v)
 
-        # 2. Split tensor by number of heads, [batch_size, length, n_head, d_tensor]
+        # 2. Split tensor by number of heads, [batch_size, length, n_head, d_key]
         q, k, v = self.split(q), self.split(k), self.split(v)
 
         # 3. Apply attention
@@ -84,12 +84,12 @@ class MultiheadAttention(nn.Module):
     def split(self, tensor):
         batch_size, length, d_model = tensor.size()
 
-        d_tensor = d_model // self.n_head
-        return tensor.view(batch_size, length, self.n_head, d_tensor).transpose(1, 2)
+        d_key = d_model // self.n_head
+        return tensor.view(batch_size, length, self.n_head, d_key).transpose(1, 2)
 
     def concat(self, tensor):
-        batch_size, head, length, d_tensor = tensor.size()
-        d_model = head * d_tensor
+        batch_size, head, length, d_key = tensor.size()
+        d_model = head * d_key
 
         tensor = tensor.transpose(1, 2).contiguous().view(batch_size, length, d_model)
         return tensor

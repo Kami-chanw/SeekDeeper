@@ -9,26 +9,30 @@ class DecoderLayer(nn.Module):
 
     def __init__(self, d_model, ffn_hidden, n_head, dropout, device):
         super(DecoderLayer, self).__init__()
-        self.self_attn = MultiheadAttention(d_model=d_model, n_head=n_head, device=device)
-        self.layer_norm1 = LayerNorm(normalized_shape=d_model, device=device)
+        self.self_attn = MultiheadAttention(
+            d_model=d_model, n_head=n_head, device=device
+        )
+        self.ln_1 = LayerNorm(normalized_shape=d_model, device=device)
         self.dropout = nn.Dropout(p=dropout)
 
-        self.enc_dec_attention = MultiheadAttention(d_model=d_model, n_head=n_head, device=device)
-        self.layer_norm2 = LayerNorm(normalized_shape=d_model, device=device)
+        self.enc_dec_attention = MultiheadAttention(
+            d_model=d_model, n_head=n_head, device=device
+        )
+        self.ln_2 = LayerNorm(normalized_shape=d_model, device=device)
 
         self.ffn = PositionwiseFeedForward(
             d_model=d_model, hidden=ffn_hidden, dropout=dropout, device=device
         )
-        self.layer_norm3 = LayerNorm(normalized_shape=d_model, device=device)
+        self.ln_3 = LayerNorm(normalized_shape=d_model, device=device)
 
     def forward(self, dec, enc, tgt_mask, src_mask):
         # 1. Apply self attention
         residual = dec
         x = self.self_attn(q=dec, k=dec, v=dec, mask=tgt_mask)
+        x = self.dropout(x)
 
         # 2. Add and norm
-        x = self.dropout(x)
-        x = self.layer_norm1(x + residual)
+        x = self.ln_1(x + residual)
 
         if enc is not None:
             # 3. Cross attention
@@ -37,14 +41,14 @@ class DecoderLayer(nn.Module):
             x = self.dropout(x)
 
             # 4. add and norm
-            x = self.layer_norm2(x + residual)
+            x = self.ln_2(x + residual)
 
         # 5. positionwise feed forward network
         residual = x
         x = self.dropout(self.ffn(x))
 
         # 6. add and norm
-        x = self.layer_norm3(x + residual)
+        x = self.ln_3(x + residual)
         return x
 
 
@@ -56,7 +60,7 @@ class Decoder(nn.Module):
         d_model,
         ffn_hidden,
         n_head,
-        n_layers,
+        n_layer,
         dropout,
         device,
     ):
@@ -76,9 +80,9 @@ class Decoder(nn.Module):
                     ffn_hidden=ffn_hidden,
                     n_head=n_head,
                     dropout=dropout,
-                    device=device
+                    device=device,
                 )
-                for _ in range(n_layers)
+                for _ in range(n_layer)
             ]
         )
 

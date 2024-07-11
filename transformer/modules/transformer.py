@@ -11,6 +11,7 @@ def make_src_mask(src, pad_idx, device=None):
     src_mask = (src != pad_idx).unsqueeze(1).unsqueeze(2)
     return src_mask.to(device)
 
+
 def make_tgt_mask(tgt, pad_idx, device=None):
     batch_size, tgt_len = tgt.shape
     # [batch_size, 1, 1, tgt_len]
@@ -35,7 +36,7 @@ class Transformer(nn.Module):
         n_head,
         max_len,
         ffn_hidden,
-        n_layers,
+        n_layer,
         dropout,
         device,
     ):
@@ -51,7 +52,7 @@ class Transformer(nn.Module):
         :param n_head: Number of attention heads.
         :param max_len: Maximum sequence length.
         :param ffn_hidden: Dimensionality of the feed-forward network.
-        :param n_layers: Number of layers in the encoder and decoder.
+        :param n_layer: Number of layers in the encoder and decoder.
         :param dropout: Dropout probability.
         :param device: Device to run the model on.
         """
@@ -63,12 +64,12 @@ class Transformer(nn.Module):
         self.device = device
         self.encoder = Encoder(
             d_model=d_model,
-            n_heads=n_head,
+            n_head=n_head,
             max_len=max_len,
             ffn_hidden=ffn_hidden,
             enc_voc_size=enc_voc_size,
             dropout=dropout,
-            n_layers=n_layers,
+            n_layer=n_layer,
             device=device,
         )
 
@@ -79,7 +80,7 @@ class Transformer(nn.Module):
             ffn_hidden=ffn_hidden,
             dec_voc_size=dec_voc_size,
             dropout=dropout,
-            n_layers=n_layers,
+            n_layer=n_layer,
             device=device,
         )
 

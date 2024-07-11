@@ -11,31 +11,30 @@ class EncoderLayer(nn.Module):
         self.self_attn = MultiheadAttention(
             d_model=d_model, n_head=n_head, device=device
         )
-        self.layer_norm1 = LayerNorm(normalized_shape=d_model, device=device)
+        self.ln_1 = LayerNorm(normalized_shape=d_model, device=device)
         self.dropout = nn.Dropout(p=dropout)
 
         self.ffn = PositionwiseFeedForward(
             d_model=d_model, hidden=ffn_hidden, dropout=dropout, device=device
         )
-        self.layer_norm2 = LayerNorm(normalized_shape=d_model, device=device)
+        self.ln_2 = LayerNorm(normalized_shape=d_model, device=device)
 
     def forward(self, x, src_mask):
         # 1. Self-Attention sublayer
         # x: [batch_size, seq_len, d_model]
-        # src_mask (if is not None): [batch_size, seq_len, seq_len]
         residual = x
         x = self.self_attn(x, x, x, src_mask)
         x = self.dropout(x)
 
         # 2. Add and norm
-        x = self.layer_norm1(x + residual)
+        x = self.ln_1(x + residual)
 
         # 3. Feed-Forward sublayer
         residual = x
         x = self.dropout(self.ffn(x))
 
         # 4. Add and norm
-        x = self.layer_norm2(x + residual)
+        x = self.ln_2(x + residual)
 
         return x
 
@@ -48,8 +47,8 @@ class Encoder(nn.Module):
         max_len,
         d_model,
         ffn_hidden,
-        n_heads,
-        n_layers,
+        n_head,
+        n_layer,
         dropout,
         device,
     ):
@@ -67,11 +66,11 @@ class Encoder(nn.Module):
                 EncoderLayer(
                     d_model=d_model,
                     ffn_hidden=ffn_hidden,
-                    n_head=n_heads,
+                    n_head=n_head,
                     dropout=dropout,
                     device=device,
                 )
-                for _ in range(n_layers)
+                for _ in range(n_layer)
             ]
         )
 
