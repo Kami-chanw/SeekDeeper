@@ -1,23 +1,30 @@
-from builtins import staticmethod
 import torch
 from torch import nn
 
 from .decoder import Decoder
 from .encoder import Encoder
+from .embedding import TransformerEmbedding
 
 
-def make_src_mask(src, pad_idx, device=None):
+def make_pad_mask(seq, pad_idx):
     # [batch_size, 1, 1, src_len]
-    src_mask = (src != pad_idx).unsqueeze(1).unsqueeze(2)
-    return src_mask.to(device)
+    mask = (seq != pad_idx).unsqueeze(1).unsqueeze(2)
+    return mask.to(seq.device)
 
 
-def make_tgt_mask(tgt, pad_idx, device=None):
+def make_causal_mask(seq):
+    batch_size, seq_len = seq.size()
+    # [seq_len, seq_len]
+    mask = torch.tril(torch.ones((seq_len, seq_len), device=seq.device)).bool()
+    return mask
+
+
+def make_tgt_mask(tgt, pad_idx):
     batch_size, tgt_len = tgt.shape
     # [batch_size, 1, 1, tgt_len]
-    tgt_pad_mask = Transformer.mask_src_mask(tgt, pad_idx, device)
+    tgt_pad_mask = make_pad_mask(tgt, pad_idx)
     # [tgt_len, tgt_len]
-    tgt_sub_mask = torch.tril(torch.ones((tgt_len, tgt_len), device=device)).bool()
+    tgt_sub_mask = make_causal_mask(tgt)
     # [batch_size, 1, tgt_len, tgt_len]
     tgt_mask = tgt_pad_mask & tgt_sub_mask.unsqueeze(0).unsqueeze(0)
     return tgt_mask
@@ -29,9 +36,8 @@ class Transformer(nn.Module):
         self,
         src_pad_idx,
         tgt_pad_idx,
-        tgt_sos_idx,
-        enc_voc_size,
-        dec_voc_size,
+        src_vocab_size,
+        tgt_vocab_size,
         d_model,
         n_head,
         max_len,
@@ -60,14 +66,27 @@ class Transformer(nn.Module):
         super().__init__()
         self.src_pad_idx = src_pad_idx
         self.tgt_pad_idx = tgt_pad_idx
-        self.tgt_sos_idx = tgt_sos_idx
-        self.device = device
+
+        self.src_emb = TransformerEmbedding(
+            d_model=d_model,
+            max_len=max_len,
+            vocab_size=src_vocab_size,
+            dropout=dropout,
+            device=device,
+        )
+
+        self.tgt_emb = TransformerEmbedding(
+            d_model=d_model,
+            dropout=dropout,
+            max_len=max_len,
+            vocab_size=tgt_vocab_size,
+            device=device,
+        )
+
         self.encoder = Encoder(
             d_model=d_model,
             n_head=n_head,
-            max_len=max_len,
             ffn_hidden=ffn_hidden,
-            enc_voc_size=enc_voc_size,
             dropout=dropout,
             n_layer=n_layer,
             device=device,
@@ -76,23 +95,38 @@ class Transformer(nn.Module):
         self.decoder = Decoder(
             d_model=d_model,
             n_head=n_head,
-            max_len=max_len,
             ffn_hidden=ffn_hidden,
-            dec_voc_size=dec_voc_size,
             dropout=dropout,
             n_layer=n_layer,
             device=device,
         )
 
+        self.linear = nn.Linear(d_model, tgt_vocab_size, device=device)
+
+        self._reset_parameters()
+
     def forward(self, src, tgt):
         src_mask = self.make_src_mask(src)
-        tgt_mask = self.make_tgt_mask(tgt)
-        enc_src = self.encoder(src, src_mask)
-        output = self.decoder(tgt, enc_src, tgt_mask, src_mask)
-        return output
+        memory = self.encode(src)
+        dec_out = self.decode(tgt, memory, src_mask)
+        return self.linear(dec_out)
 
     def make_src_mask(self, src):
-        return make_src_mask(src, self.src_pad_idx, self.device)
+        return make_pad_mask(src, self.src_pad_idx)
 
     def make_tgt_mask(self, tgt):
-        return make_tgt_mask(tgt, self.tgt_pad_idx, self.device)
+        return make_tgt_mask(tgt, self.tgt_pad_idx)
+
+    def encode(self, src):
+        src_mask = self.make_src_mask(src)
+        return self.encoder(self.src_emb(src), src_mask)
+
+    def decode(self, tgt, memory, memory_mask):
+        tgt_mask = self.make_tgt_mask(tgt)
+        dec_out = self.decoder(self.tgt_emb(tgt), memory, tgt_mask, memory_mask)
+        return self.linear(dec_out)
+
+    def _reset_parameters(self):
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)

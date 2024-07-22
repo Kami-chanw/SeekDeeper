@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 
-from .embedding import TransformerEmbedding
 from .layers import *
 
 
@@ -55,8 +54,6 @@ class DecoderLayer(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        dec_voc_size,
-        max_len,
         d_model,
         ffn_hidden,
         n_head,
@@ -65,13 +62,6 @@ class Decoder(nn.Module):
         device,
     ):
         super().__init__()
-        self.emb = TransformerEmbedding(
-            d_model=d_model,
-            dropout=dropout,
-            max_len=max_len,
-            vocab_size=dec_voc_size,
-            device=device,
-        )
 
         self.layers = nn.ModuleList(
             [
@@ -86,13 +76,8 @@ class Decoder(nn.Module):
             ]
         )
 
-        self.linear = nn.Linear(d_model, dec_voc_size, device=device)
-
     def forward(self, tgt, enc_src, tgt_mask, src_mask):
-        tgt = self.emb(tgt)
-
         for layer in self.layers:
             tgt = layer(tgt, enc_src, tgt_mask, src_mask)
 
-        output = self.linear(tgt)
-        return output
+        return tgt

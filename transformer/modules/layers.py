@@ -1,10 +1,13 @@
 import torch
 from torch import nn
 import math
+import torch.nn.functional as F
 
 
 class LayerNorm(nn.Module):
-    def __init__(self, normalized_shape, eps=1e-5, elementwise_affine=True, device=None):
+    def __init__(
+        self, normalized_shape, eps=1e-5, elementwise_affine=True, device=None
+    ):
         super(LayerNorm, self).__init__()
         self.normalized_shape = normalized_shape
         self.eps = eps
@@ -32,26 +35,30 @@ class LayerNorm(nn.Module):
 class ScaledDotProductAttention(nn.Module):
     def __init__(self):
         super(ScaledDotProductAttention, self).__init__()
-        self.softmax = nn.Softmax(dim=-1)
+        self.flash = self.flash = hasattr(F, "scaled_dot_product_attention")
 
     def forward(self, q, k, v, mask=None):
-        batch_size, n_head, seq_len, d_key = k.size()
+        if self.flash:
+            out = F.scaled_dot_product_attention(q, k, v, mask)
+        else:
+            # calculate attention manually
+            batch_size, n_head, seq_len, d_key = k.size()
 
-        # 1. Compute the dot product between query and key^T
-        k_t = k.transpose(-2, -1)
-        scores = q @ k_t / math.sqrt(d_key)
+            # 1. Compute the dot product between query and key^T
+            k_t = k.transpose(-2, -1)
+            scores = q @ k_t / math.sqrt(d_key)
 
-        # 2. Apply mask (optional)
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, float("-inf"))
+            # 2. Apply mask (optional)
+            if mask is not None:
+                scores = scores.masked_fill(mask.logical_not(), float("-inf"))
 
-        # 3. Apply softmax to get attention weights
-        attn = self.softmax(scores)
+            # 3. Apply softmax to get attention weights
+            attn = F.softmax(scores, dim=-1)
 
-        # 4. Compute the weighted sum of values
-        out = attn @ v
+            # 4. Compute the weighted sum of values
+            out = attn @ v
 
-        return out, attn
+        return out
 
 
 class MultiheadAttention(nn.Module):
@@ -73,7 +80,7 @@ class MultiheadAttention(nn.Module):
         q, k, v = self.split(q), self.split(k), self.split(v)
 
         # 3. Apply attention
-        out, attn = self.attention(q, k, v, mask=mask)
+        out = self.attention(q, k, v, mask=mask)
 
         # 4. concat and pass to linear layer, [batch_size, length, d_model]
         out = self.concat(out)

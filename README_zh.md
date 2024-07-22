@@ -22,7 +22,7 @@
 ```
 <model name>/
 ├── checkpoints/
-├── components/
+├── modules/
 ├── datasets/
 ├── images/
 ├── README.md

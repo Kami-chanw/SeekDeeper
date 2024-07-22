@@ -1,6 +1,6 @@
-[\[📖English ReadMe\]](./README.md)
+[$$📖English ReadMe\]](./README.md)
 ## Introduction
-在这里，我实现了一个Transformer，并使用其Encoder在IMDB数据集上进行了文本情感分类任务（见[此](./train_imdb.ipynb)）。
+在这里，我实现了一个Transformer，并使用其在Multi30k数据集上进行了英-德翻译任务（见[此](./train.ipynb)）。在训练模型之后，你可以在[此](./inference.ipynb)加载模型并进行推理。
 
 ## Model details
 ### [Transformer](./modules/transformer.py)
@@ -26,7 +26,7 @@ Encoder和Decoder分别使用了两种mask，`src_mask`和`tgt_mask`。`src_mask
 
 为了数值稳定性，我们对div term取指数和对数，即：
 $$
-\text{div\_term} = 10000^{2i/d_{\text{model}}} = \exp\left(\frac{2i \cdot -\log(10000)}{d_{\text{model}}}\right)
+\text{div\_ term} = 10000^{2i/d_{\text{model}}} = \exp\left(\frac{2i \cdot -\log(10000)}{d_{\text{model}}}\right)
 $$
 
 位置编码对任何序列都是相同的，因此positional encoding的shape为`[seq_len, d_model]`。然后根据广播机制与shape为`[batch_size, seq_len, d_model]`的input embedding相加，得到Encoder的输入，记作$x_0$。
@@ -90,3 +90,34 @@ residual = x
 x = feed_forward(x)
 x = layer_norm(x + residual)
 ```
+
+## Training Strategy
+### Training Data and Batching
+[Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.1 提到，训练集使用的是WMT 2014，每一个训练批次有大约25k source tokens和25k target tokens，结果产生了 6,230 个批次。平均批次大小为 724，平均长度为 45 个tokens。考虑到GPU显存不足，为了确保每个批次都足够的tokens，因此需要采取梯度累积策略，每`update_freq`轮才更新一次梯度。
+
+论文还提到对base transformer进行了 100,000 次迭代训练，这应该对应于 16 个epochs。
+### Optimizer
+[Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.3 提到，优化器使用的是 Adam，参数依次为$\beta_1 = 0.9, \beta_2 = 0.98, \epsilon = 10^{-9}$。此外，根据如下公式，在训练过程中改变了学习率：
+
+$$lrate=d_{\mathrm{model}}^{-0.5}\cdot\min(step\_ num^{-0.5},step\_ num\cdot warmup\_ steps^{-1.5})$$
+
+这相当于在前 $warmup_steps$ 训练步骤中线性增加学习率，然后按步数的平方根倒数比例降低学习率。Transformer base 训练了 100,000 步，在此设置下 $warmup\_ steps = 4000$。
+
+### Label Smoothing
+[Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.4 提到使用标签平滑技术虽然会损害模型的困惑度，但可以略微提升BLEU和准确率。标签平滑是[Rethinking the Inception Architecture for Computer Vision](https://arxiv.org/pdf/1512.00567)中提出的。它是一种正则化技术，通过在计算损失时对目标标签进行平滑处理，从而防止模型过度自信地预测单个类别。具体而言，它将标签从硬标签（one-hot vector）转变为软标签（soft labels），从而在训练过程中引入一些不确定性。
+
+假设有一个类别数为 $C$ 的分类任务，对于每个样本 $x$，标签平滑后的目标分布 $y_{\text{smooth}}$ 定义为：
+
+$$y_{\text{smooth}} = (1 - \epsilon) \cdot y_{\text{one-hot}} + (1-y_{\text{one-hot}})\cdot \frac{\epsilon}{C-1}$$
+
+其中，$\epsilon$ 是平滑参数，默认为 0.1。$y_{\text{one-hot}}$ 是原始的one-hot标签。
+
+你可以在[config.py](./config.py)中修改`eps_ls`控制$\epsilon$的大小。如果$\epsilon=0$则将禁用标签平滑，使用交叉熵作为损失函数。
+
+## Evaluation
+为了评估机器翻译的效果，本实现遵循了[Attention is all you need](https://arxiv.org/pdf/1706.03762)的设置，使用[BLEU](https://aclanthology.org/P02-1040.pdf)分数。具体过程是，先使源语言和目标语言经过transformer的前向过程，然后使用greedy decode的方法从decoder输出中选取概率最大的token作为预测结果。然后利用[sacrebleu](https://github.com/mjpost/sacrebleu)计算BLEU。
+
+为了提高翻译的效果，实际上也可以使用beam search作为decode方法，欢迎提交PR :)。
+
+## Inference
+在推理测试阶段，我们使用原语言语句通过

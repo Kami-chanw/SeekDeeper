@@ -7,7 +7,7 @@ class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model, max_len, device):
         super(PositionalEncoding, self).__init__()
-        
+
         # Initialize position encoding matrix (shape: [max_len, d_model])
         pe = torch.zeros(max_len, d_model, device=device)
 

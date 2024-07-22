@@ -21,7 +21,7 @@ For each model, the typical directory structure is as follows:
 ```
 <model name>/
 ├── checkpoints/
-├── components/
+├── modules/
 ├── datasets/
 ├── images/
 ├── README.md
@@ -32,7 +32,7 @@ For each model, the typical directory structure is as follows:
 ```
 
 - **checkpoints/**: Contains pre-trained model weights for direct use in `inference.ipynb`. Sometimes, pre-trained parameters from official repositories are loaded directly.
-- **components/**: Contains components necessary for model implementation.
+- **modules/**: Contains modules necessary for model implementation.
 - **datasets/**: Contains datasets required for training or inference validation, which may sometimes be downloaded to this directory via code.
 - **images/**: Contains datasets required for training or inference validation, which may sometimes be downloaded to this directory via code.
 - **README.md**: Introduces the implemented task and describes the implementation details.

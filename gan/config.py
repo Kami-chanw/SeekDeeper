@@ -28,6 +28,7 @@ num_samples = 64  # Number of images to generate each sampling
 
 
 # path
+dataset_root = "./datasets"
 ckpt_mnist_dir = "./checkpoints/mnist"
 sample_mnist_dir = "./samples/mnist"
 

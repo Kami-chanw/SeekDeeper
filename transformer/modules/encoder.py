@@ -1,6 +1,5 @@
 from torch import nn
 
-from .embedding import TransformerEmbedding
 from .layers import *
 
 
@@ -43,8 +42,6 @@ class Encoder(nn.Module):
 
     def __init__(
         self,
-        enc_voc_size,
-        max_len,
         d_model,
         ffn_hidden,
         n_head,
@@ -53,13 +50,6 @@ class Encoder(nn.Module):
         device,
     ):
         super().__init__()
-        self.emb = TransformerEmbedding(
-            d_model=d_model,
-            max_len=max_len,
-            vocab_size=enc_voc_size,
-            dropout=dropout,
-            device=device,
-        )
 
         self.layers = nn.ModuleList(
             [
@@ -75,8 +65,6 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x, src_mask):
-        x = self.emb(x)
-
         for layer in self.layers:
             x = layer(x, src_mask)
 
