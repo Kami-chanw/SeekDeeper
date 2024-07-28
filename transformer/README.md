@@ -1,6 +1,6 @@
 [$$📖中文 ReadMe\]](./README_zh.md)
 ## Introduction
-Here, I have implemented a Transformer and used it for an English-to-German translation task on the Multi30k dataset (see [here](./train.ipynb)). After training the model, you can load the model and perform inference [here](./inference.ipynb).
+Here, I have implemented a Transformer and used it for an English-to-German translation task on the IWSLT 2017 dataset (see [here](./train.ipynb)). After training the model, you can load the model and perform inference [here](./inference.ipynb).
 
 ## Model details
 ### [Transformer](./modules/transformer.py)
@@ -102,7 +102,11 @@ The paper also mentions training the base transformer for 100,000 iterations, wh
 
 $$lrate=d_{\mathrm{model}}^{-0.5}\cdot\min(step\_ num^{-0.5},step\_ num\cdot warmup\_ steps^{-1.5})$$
 
-This means linearly increasing the learning rate in the first $warmup_steps$ training steps, then decreasing it proportionally to the inverse square root of the step number. The base transformer was trained for 100,000 steps, with $warmup\_ steps = 4000$ under this setting.
+This means linearly increasing the learning rate in the first $warmup_steps$ training steps, then decreasing it proportionally to the inverse square root of the step number. The base transformer was trained for 100,000 steps, with $warmup\_ steps = 4000$ under this setting. The visualization of learning rate is shown as below
+<div style="text-align: center;">
+  <img src="./images/lr.png" alt="Transformer" style="width: 500px; height: auto;">
+</div>
+
 
 ### Label Smoothing
 [Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.4 mentions that using label smoothing slightly improves BLEU and accuracy, although it harms perplexity. Label smoothing, proposed in [Rethinking the Inception Architecture for Computer Vision](https://arxiv.org/pdf/1512.00567), is a regularization technique that smooths the target labels when computing the loss, preventing the model from becoming overly confident in predicting single classes. Specifically, it transforms hard labels (one-hot vectors) into soft labels, introducing some uncertainty during training.

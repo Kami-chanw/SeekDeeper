@@ -1,6 +1,7 @@
 __pycache__/
 checkpoints/
+gpt/
+bert/
 **/datasets/**
-gpt/**
-bert/**
-!**/datasets/*.py
+!**/datasets/**/*.py
+!**/datasets/**/*.json

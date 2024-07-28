@@ -1,173 +1,149 @@
 import os
 import torch
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset
-from collections import Counter
-import spacy
+from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import config
-import pickle
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.processors import TemplateProcessing
+import datasets
+from typing import Sequence, Optional
+
+SOS_TOKEN = "[SOS]"
+EOS_TOKEN = "[EOS]"
+PAD_TOKEN = "[PAD]"
+UNK_TOKEN = "[UNK]"
+
+special_tokens = [SOS_TOKEN, EOS_TOKEN, PAD_TOKEN, UNK_TOKEN]
 
 
-class TranslationDataset(Dataset):
-    def __init__(
-        self, src_file, tgt_file, src_vocab, tgt_vocab, src_tokenizer, tgt_tokenizer
-    ):
-        self.src_sentences = open(src_file, "r", encoding="utf-8").readlines()
-        self.tgt_sentences = open(tgt_file, "r", encoding="utf-8").readlines()
-        self.src_vocab = src_vocab
-        self.tgt_vocab = tgt_vocab
-        self.src_tokenizer = src_tokenizer
-        self.tgt_tokenizer = tgt_tokenizer
-
-    def __len__(self):
-        return len(self.src_sentences)
-
-    def __getitem__(self, idx):
-        src_sentence = self.src_sentences[idx].strip()
-        tgt_sentence = self.tgt_sentences[idx].strip()
-        src_tensor = torch.tensor(
-            [
-                self.src_vocab.get(token, self.src_vocab["<unk>"])
-                for token in self.src_tokenizer(src_sentence)
-            ],
-            dtype=torch.long,
-        )
-        tgt_tensor = torch.tensor(
-            [
-                self.tgt_vocab.get(token, self.tgt_vocab["<unk>"])
-                for token in self.tgt_tokenizer(tgt_sentence)
-            ],
-            dtype=torch.long,
-        )
-        return src_tensor, tgt_tensor
-
-
-def build_vocab(language, data_path, tokenizer):
-    specials = ["<unk>", "<pad>", "<sos>", "<eos>"]
-    save_path = os.path.join(config.dataset_dir, f"vocab.{language}")
-    if os.path.exists(save_path):
-        with open(save_path, "rb") as f:
-            vocab = pickle.load(f)
+def build_tokenizer(dataset, lang, force_reload):
+    tokenizer_path = os.path.join(config.dataset_dir, f"tokenizer-{lang}.json")
+    if os.path.exists(tokenizer_path) and not force_reload:
+        tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN)).from_file(tokenizer_path)
     else:
-        counter = Counter()
-        with open(data_path, "r", encoding="utf-8") as f:
-            for line in f:
-                counter.update(tokenizer(line.strip()))
-        vocab = {token: idx for idx, token in enumerate(specials)}
-        vocab.update(
-            {
-                token: idx + len(specials)
-                for idx, (token, _) in enumerate(counter.items())
-            }
+        tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN))
+        tokenizer.pre_tokenizer = Whitespace()
+        trainer = BpeTrainer(
+            special_tokens=special_tokens, show_progress=True, min_frequency=2
         )
-        with open(save_path, "wb") as f:
-            pickle.dump(vocab, f)
-    return vocab
+        print(f"Training tokenizer for {lang}...")
+
+        def batch_iterator():
+            for i in range(0, dataset["train"].num_rows, config.batch_size):
+                yield dataset["train"][i : i + config.batch_size][lang]
+
+        tokenizer.train_from_iterator(batch_iterator(), trainer)
+        tokenizer.enable_padding(
+            pad_id=tokenizer.token_to_id(PAD_TOKEN), pad_token=PAD_TOKEN
+        )
+        tokenizer.enable_truncation(max_length=config.max_len)
+        tokenizer.post_processor = TemplateProcessing(
+            single=f"{SOS_TOKEN} $A {EOS_TOKEN}",
+            pair=f"{SOS_TOKEN} $A {EOS_TOKEN} $B:1 {EOS_TOKEN}:1",  # not used
+            special_tokens=[
+                (SOS_TOKEN, tokenizer.token_to_id(SOS_TOKEN)),
+                (EOS_TOKEN, tokenizer.token_to_id(EOS_TOKEN)),
+            ],
+        )
+        tokenizer.save(tokenizer_path)
+    return tokenizer
 
 
-def get_tokenizer(language):
-    spacy_langs = {
-        "en": "en_core_web_sm",
-        "de": "de_core_news_sm",
-    }
-    # Please download `en_core_web_sm` and `de_core_news_sm` first
-    # for example, to download `en_core_web_sm`, using `pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-x.y.z/en_core_web_sm-x.y.z.tar.gz --no-deps`
-    # for the URL in the command, find a compatible release here: https://github.com/explosion/spacy-models/releases/
-
-    spacy_tokenizer = spacy.load(spacy_langs[language])
-    return lambda text: [tok.text for tok in spacy_tokenizer(text)]
-
-
-def load_data(src_lang="en", tgt_lang="de"):
-    if sorted((src_lang, tgt_lang)) != ["de", "en"]:
-        raise ValueError("Available language options are ('de','en') and ('en', 'de')")
-
-    splits = ["train", "valid", "test"]
-    prefix = {"train": "train", "valid": "val", "test": "test"}
-    data_files = {
-        split: {
-            "src": os.path.join(
-                config.dataset_dir, split, f"{prefix[split]}.{src_lang}"
-            ),
-            "tgt": os.path.join(
-                config.dataset_dir, split, f"{prefix[split]}.{tgt_lang}"
-            ),
-        }
+def load_dataset(splits):
+    # data format in parquet, e.g. en -> de
+    #                               "translation"
+    # 1:     {"en" : <an English sentence>, "de" : <a German sentence>}
+    # 2:     {"en" : <an English sentence>, "de" : <a German sentence>}
+    # 3:                                ...
+    parquet_filenames = {
+        split: [
+            os.path.join(config.dataset_dir, split, f)
+            for f in os.listdir(os.path.join(config.dataset_dir, split))
+            if f.endswith(".parquet")
+        ]
         for split in splits
     }
 
-    source_tokenizer = get_tokenizer(src_lang)
-    target_tokenizer = get_tokenizer(tgt_lang)
+    #          "translation.en"           "translation.de"
+    # 1:     <an English sentence>      <a German sentence>
+    # 2:     <an English sentence>      <a German sentence>
+    # 3:              ...                      ...
+    dataset = datasets.load_dataset("parquet", data_files=parquet_filenames).flatten()
 
-    src_vocab = build_vocab(src_lang, data_files["train"]["src"], source_tokenizer)
-    tgt_vocab = build_vocab(tgt_lang, data_files["train"]["tgt"], target_tokenizer)
+    # rename columns
+    #                 "en"                     "de"
+    # 1:     <an English sentence>      <a German sentence>
+    # 2:     <an English sentence>      <a German sentence>
+    # 3:              ...                      ...
+    for split in splits:
+        columns = dataset[split].column_names
+        lang_suffix = [col.split(".")[-1] for col in columns]
+        dataset[split] = dataset[split].rename_columns(
+            {col: suffix for col, suffix in zip(columns, lang_suffix)}
+        )
+    return dataset.with_format("torch")
 
-    train_dataset = TranslationDataset(
-        data_files["train"]["src"],
-        data_files["train"]["tgt"],
-        src_vocab,
-        tgt_vocab,
-        source_tokenizer,
-        target_tokenizer,
-    )
-    valid_dataset = TranslationDataset(
-        data_files["valid"]["src"],
-        data_files["valid"]["tgt"],
-        src_vocab,
-        tgt_vocab,
-        source_tokenizer,
-        target_tokenizer,
-    )
-    test_dataset = TranslationDataset(
-        data_files["test"]["src"],
-        data_files["test"]["tgt"],
-        src_vocab,
-        tgt_vocab,
-        source_tokenizer,
-        target_tokenizer,
-    )
+
+def load_data(
+    src_lang, tgt_lang, splits: Optional[Sequence[str]] = None, force_reload=False
+):
+    """
+    Load IWSLT 2017 dataset. The raw data should be downloaded at `config.dataset_dir` by running download.py first.
+    Args:
+        src_lang (str): Source language, which depends on which language pair you download.
+        tgt_lang (str): Target language, which depends on which language pair you download.
+        splits (`Sequence[str]` or `None`, defaults to `None`): The splits you want to load. It can be arbitrary combination of "train", "test" and "valid".
+        force_reload (`bool`, defaults to `False`): If set to `True`, it will re-train a new tokenizer with BPE.
+    """
+    if sorted((src_lang, tgt_lang)) != ["de", "en"]:
+        raise ValueError("Available language options are ('de','en') and ('en', 'de')")
+    all_splits = ["train", "valid", "test"]
+    if not set(splits).issubset(all_splits):
+        raise ValueError(f"Splits should only contain some of {all_splits}")
+
+    dataset = load_dataset(splits)
+
+    src_tokenizer = build_tokenizer(dataset, src_lang, force_reload)
+    tgt_tokenizer = build_tokenizer(dataset, tgt_lang, force_reload)
 
     def collate_fn(batch):
         src_batch, tgt_batch = [], []
-        for src_item, tgt_item in batch:
-            src_batch.append(
-                torch.cat(
-                    [
-                        torch.tensor([src_vocab["<sos>"]]),
-                        src_item,
-                        torch.tensor([src_vocab["<eos>"]]),
-                    ],
-                    dim=0,
-                )
-            )
-            tgt_batch.append(
-                torch.cat(
-                    [
-                        torch.tensor([tgt_vocab["<sos>"]]),
-                        tgt_item,
-                        torch.tensor([tgt_vocab["<eos>"]]),
-                    ],
-                    dim=0,
-                )
-            )
-        src_batch = pad_sequence(src_batch, padding_value=src_vocab["<pad>"])
-        tgt_batch = pad_sequence(tgt_batch, padding_value=tgt_vocab["<pad>"])
-        return src_batch, tgt_batch
+        for item in batch:
+            src_batch.append(item[src_lang])
+            tgt_batch.append(item[tgt_lang])
 
-    train_dataloader = DataLoader(
-        train_dataset, batch_size=config.batch_size, collate_fn=collate_fn, shuffle=True
-    )
-    valid_dataloader = DataLoader(
-        valid_dataset, batch_size=config.batch_size, collate_fn=collate_fn
-    )
-    test_dataloader = DataLoader(
-        test_dataset, batch_size=config.batch_size, collate_fn=collate_fn
-    )
+        src_batch = src_tokenizer.encode_batch(src_batch)
+        tgt_batch = tgt_tokenizer.encode_batch(tgt_batch)
 
-    return (
-        src_vocab,
-        tgt_vocab,
-        train_dataloader,
-        valid_dataloader,
-        test_dataloader,
-    )
+        src_tensor = torch.LongTensor([item.ids for item in src_batch])
+        tgt_tensor = torch.LongTensor([item.ids for item in tgt_batch])
+
+        if src_tensor.shape[-1] < tgt_tensor.shape[-1]:
+            src_tensor = F.pad(
+                src_tensor,
+                [0, tgt_tensor.shape[-1] - src_tensor.shape[-1]],
+                value=src_tokenizer.token_to_id(PAD_TOKEN),
+            )
+        else:
+            tgt_tensor = F.pad(
+                tgt_tensor,
+                [0, src_tensor.shape[-1] - tgt_tensor.shape[-1]],
+                value=tgt_tokenizer.token_to_id(PAD_TOKEN),
+            )
+
+        return src_tensor, tgt_tensor
+
+    dataloaders = [
+        DataLoader(
+            dataset[split],
+            batch_size=config.batch_size,
+            collate_fn=collate_fn,
+            shuffle=split == "train",
+        )
+        for split in splits
+    ]
+
+    return (src_tokenizer, tgt_tokenizer, *dataloaders)

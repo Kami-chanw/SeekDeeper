@@ -1,6 +1,6 @@
 [$$📖English ReadMe\]](./README.md)
 ## Introduction
-在这里，我实现了一个Transformer，并使用其在Multi30k数据集上进行了英-德翻译任务（见[此](./train.ipynb)）。在训练模型之后，你可以在[此](./inference.ipynb)加载模型并进行推理。
+在这里，我实现了一个Transformer，并使用其在IWSLT 2017数据集上进行了英-德翻译任务（见[此](./train.ipynb)）。在训练模型之后，你可以在[此](./inference.ipynb)加载模型并进行推理。
 
 ## Model details
 ### [Transformer](./modules/transformer.py)
@@ -101,7 +101,10 @@ x = layer_norm(x + residual)
 
 $$lrate=d_{\mathrm{model}}^{-0.5}\cdot\min(step\_ num^{-0.5},step\_ num\cdot warmup\_ steps^{-1.5})$$
 
-这相当于在前 $warmup_steps$ 训练步骤中线性增加学习率，然后按步数的平方根倒数比例降低学习率。Transformer base 训练了 100,000 步，在此设置下 $warmup\_ steps = 4000$。
+这相当于在前 $warmup_steps$ 训练步骤中线性增加学习率，然后按步数的平方根倒数比例降低学习率。Transformer base 训练了 100,000 步，在此设置下 $warmup\_ steps = 4000$。学习率的可视化如下所示
+<div style="text-align: center;">
+  <img src="./images/lr.png" alt="Transformer" style="width: 500px; height: auto;">
+</div>
 
 ### Label Smoothing
 [Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.4 提到使用标签平滑技术虽然会损害模型的困惑度，但可以略微提升BLEU和准确率。标签平滑是[Rethinking the Inception Architecture for Computer Vision](https://arxiv.org/pdf/1512.00567)中提出的。它是一种正则化技术，通过在计算损失时对目标标签进行平滑处理，从而防止模型过度自信地预测单个类别。具体而言，它将标签从硬标签（one-hot vector）转变为软标签（soft labels），从而在训练过程中引入一些不确定性。
@@ -118,6 +121,3 @@ $$y_{\text{smooth}} = (1 - \epsilon) \cdot y_{\text{one-hot}} + (1-y_{\text{one-
 为了评估机器翻译的效果，本实现遵循了[Attention is all you need](https://arxiv.org/pdf/1706.03762)的设置，使用[BLEU](https://aclanthology.org/P02-1040.pdf)分数。具体过程是，先使源语言和目标语言经过transformer的前向过程，然后使用greedy decode的方法从decoder输出中选取概率最大的token作为预测结果。然后利用[sacrebleu](https://github.com/mjpost/sacrebleu)计算BLEU。
 
 为了提高翻译的效果，实际上也可以使用beam search作为decode方法，欢迎提交PR :)。
-
-## Inference
-在推理测试阶段，我们使用原语言语句通过

@@ -106,10 +106,7 @@ class Transformer(nn.Module):
         self._reset_parameters()
 
     def forward(self, src, tgt):
-        src_mask = self.make_src_mask(src)
-        memory = self.encode(src)
-        dec_out = self.decode(tgt, memory, src_mask)
-        return self.linear(dec_out)
+        return self.decode(tgt, self.encode(src), self.make_src_mask(src))
 
     def make_src_mask(self, src):
         return make_pad_mask(src, self.src_pad_idx)
@@ -118,13 +115,14 @@ class Transformer(nn.Module):
         return make_tgt_mask(tgt, self.tgt_pad_idx)
 
     def encode(self, src):
-        src_mask = self.make_src_mask(src)
-        return self.encoder(self.src_emb(src), src_mask)
+        return self.encoder(self.src_emb(src), self.make_src_mask(src))
 
     def decode(self, tgt, memory, memory_mask):
-        tgt_mask = self.make_tgt_mask(tgt)
-        dec_out = self.decoder(self.tgt_emb(tgt), memory, tgt_mask, memory_mask)
-        return self.linear(dec_out)
+        return self.linear(
+            self.decoder(
+                self.tgt_emb(tgt), memory, self.make_tgt_mask(tgt), memory_mask
+            )
+        )
 
     def _reset_parameters(self):
         for p in self.parameters():
