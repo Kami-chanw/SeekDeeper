@@ -52,41 +52,6 @@ def build_tokenizer(dataset, lang, force_reload):
     return tokenizer
 
 
-def load_dataset(splits):
-    # data format in parquet, e.g. en -> de
-    #                               "translation"
-    # 1:     {"en" : <an English sentence>, "de" : <a German sentence>}
-    # 2:     {"en" : <an English sentence>, "de" : <a German sentence>}
-    # 3:                                ...
-    parquet_filenames = {
-        split: [
-            os.path.join(config.dataset_dir, split, f)
-            for f in os.listdir(os.path.join(config.dataset_dir, split))
-            if f.endswith(".parquet")
-        ]
-        for split in splits
-    }
-
-    #          "translation.en"           "translation.de"
-    # 1:     <an English sentence>      <a German sentence>
-    # 2:     <an English sentence>      <a German sentence>
-    # 3:              ...                      ...
-    dataset = datasets.load_dataset("parquet", data_files=parquet_filenames).flatten()
-
-    # rename columns
-    #                 "en"                     "de"
-    # 1:     <an English sentence>      <a German sentence>
-    # 2:     <an English sentence>      <a German sentence>
-    # 3:              ...                      ...
-    for split in splits:
-        columns = dataset[split].column_names
-        lang_suffix = [col.split(".")[-1] for col in columns]
-        dataset[split] = dataset[split].rename_columns(
-            {col: suffix for col, suffix in zip(columns, lang_suffix)}
-        )
-    return dataset.with_format("torch")
-
-
 def load_data(
     src_lang, tgt_lang, splits: Optional[Sequence[str]] = None, force_reload=False
 ):
@@ -100,11 +65,13 @@ def load_data(
     """
     if sorted((src_lang, tgt_lang)) != ["de", "en"]:
         raise ValueError("Available language options are ('de','en') and ('en', 'de')")
-    all_splits = ["train", "valid", "test"]
+    all_splits = ["train", "validation", "test"]
     if not set(splits).issubset(all_splits):
         raise ValueError(f"Splits should only contain some of {all_splits}")
 
-    dataset = load_dataset(splits)
+    dataset = datasets.load_dataset(
+        "iwslt2017", f"iwslt2017-{src_lang}-{tgt_lang}", trust_remote_code=True
+    )
 
     src_tokenizer = build_tokenizer(dataset, src_lang, force_reload)
     tgt_tokenizer = build_tokenizer(dataset, tgt_lang, force_reload)
