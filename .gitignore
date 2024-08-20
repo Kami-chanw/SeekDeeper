@@ -1,6 +1,5 @@
 __pycache__/
 checkpoints/
-gpt/
 bert/
 **/datasets/**
 !**/datasets/**/*.py

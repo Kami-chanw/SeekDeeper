@@ -5,14 +5,47 @@
 Official code repositories often include many engineering details, which can be overwhelming for beginners. This repository aims to implement various models with as little code as possible using PyTorch, making it easier for learners to understand and reproduce results. Additionally, most tutorials lack a complete workflow, focusing only on the model without considering data loading and training. This makes it difficult for beginners to apply their knowledge in practice.
 
 ## Models
+<table>
+  <thead>
+    <tr style="font-weight: bold; border-bottom: 2px solid">
+      <th>Model</th>
+      <th>Paper</th>
+      <th>Official or Reference Repository</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Transformer</td>
+      <td><a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a></td>
+      <td><a href="https://github.com/hyunwoongko/transformer">https://github.com/hyunwoongko/transformer</a></td>
+    </tr>
+    <tr>
+      <td>GPT</td>
+      <td><a href="https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf">Improving Language Understanding by Generative Pre-Training</a></td>
+      <td rowspan=2><a href="https://github.com/openai/finetune-transformer-lm">https://github.com/openai/finetune-transformer-lm</a></br><a href="https://github.com/openai/gpt-2">https://github.com/openai/gpt-2</a></br><a href="https://github.com/karpathy/nanoGPT">https://github.com/karpathy/nanoGPT</a></br><a href="https://github.com/karpathy/minGPT">https://github.com/karpathy/minGPT</a></td>
+    </tr>
+    <tr>
+      <td>GPT-2</td>
+      <td><a href="https://cdn.openai.com/research-covers/language_models_are_unsupervised_multitask_learners.pdf">Language Models are Unsupervised Multitask Learners</a></td>
+    </tr>
+    <tr>
+      <td>GAN</td>
+      <td><a href="https://arxiv.org/abs/1406.2661">Generative Adversarial Networks</a></td>
+      <td><a href="https://github.com/goodfeli/adversarial">https://github.com/goodfeli/adversarial</a></td>
+    </tr>
+    <tr>
+      <td>DCGAN</td>
+      <td><a href="https://arxiv.org/pdf/1511.06434">Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks</a></td>
+      <td><a href="https://github.com/Newmu/dcgan_code">https://github.com/Newmu/dcgan_code</a></td>
+    </tr>
+    <tr>
+      <td>WGAN-GP</td>
+      <td><a href="https://arxiv.org/pdf/1704.00028">Improved Training of Wasserstein GANs</a></td>
+      <td><a href="https://github.com/igul222/improved_wgan_training">https://github.com/igul222/improved_wgan_training</a></td>
+    </tr>
+  </tbody>
+</table>
 
-| Model       | Paper                                                                                                                                                         | Official or Reference Repository                  |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Transformer | [Attention Is All You Need](https://arxiv.org/abs/1706.03762)                                                                                                 | https://github.com/hyunwoongko/transformer        |
-| GPT         | [Improving Language Understanding by Generative Pre-Training](https://cdn.openai.com/research-covers/language_models_are_unsupervised_multitask_learners.pdf) | https://github.com/openai/gpt-2                   |
-| GAN         | [Generative Adversarial Networks](https://arxiv.org/abs/1406.2661)                                                                                            | https://github.com/goodfeli/adversarial           |
-| DCGAN       | [Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/pdf/1511.06434)                              | https://github.com/Newmu/dcgan_code               |
-| WGAN-GP     | [Improved Training of Wasserstein GANs](https://arxiv.org/pdf/1704.00028)                                                                                     | https://github.com/igul222/improved_wgan_training |
 
 ## Directory Structure
 

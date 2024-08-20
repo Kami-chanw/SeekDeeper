@@ -5,17 +5,15 @@ import torch.nn.functional as F
 
 
 class LayerNorm(nn.Module):
-    def __init__(
-        self, normalized_shape, eps=1e-5, elementwise_affine=True, device=None
-    ):
+    def __init__(self, normalized_shape, eps=1e-5, elementwise_affine=True):
         super(LayerNorm, self).__init__()
         self.normalized_shape = normalized_shape
         self.eps = eps
         self.elementwise_affine = elementwise_affine
         if self.elementwise_affine:
             # Learnable parameters
-            self.gamma = nn.Parameter(torch.ones(normalized_shape, device=device))
-            self.beta = nn.Parameter(torch.zeros(normalized_shape, device=device))
+            self.gamma = nn.Parameter(torch.ones(normalized_shape))
+            self.beta = nn.Parameter(torch.zeros(normalized_shape))
         else:
             self.gamma = None
             self.beta = None
@@ -63,14 +61,15 @@ class ScaledDotProductAttention(nn.Module):
 
 class MultiheadAttention(nn.Module):
 
-    def __init__(self, d_model, n_head, device):
+    def __init__(self, d_model, n_head, dropout):
         super(MultiheadAttention, self).__init__()
         self.n_head = n_head
         self.attention = ScaledDotProductAttention()
-        self.w_q = nn.Linear(d_model, d_model, device=device)
-        self.w_k = nn.Linear(d_model, d_model, device=device)
-        self.w_v = nn.Linear(d_model, d_model, device=device)
-        self.w_concat = nn.Linear(d_model, d_model, device=device)
+        self.w_q = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(d_model, d_model)
+        self.w_v = nn.Linear(d_model, d_model)
+        self.w_concat = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, q, k, v, mask=None):
         # 1. Linear projections, [batch_size, length, d_model]
@@ -86,7 +85,7 @@ class MultiheadAttention(nn.Module):
         out = self.concat(out)
         out = self.w_concat(out)
 
-        return out
+        return self.dropout(out)
 
     def split(self, tensor):
         batch_size, length, d_model = tensor.size()
@@ -104,10 +103,10 @@ class MultiheadAttention(nn.Module):
 
 class PositionwiseFeedForward(nn.Module):
 
-    def __init__(self, d_model, hidden, dropout, device):
+    def __init__(self, d_model, hidden, dropout):
         super(PositionwiseFeedForward, self).__init__()
-        self.linear1 = nn.Linear(d_model, hidden, device=device)
-        self.linear2 = nn.Linear(hidden, d_model, device=device)
+        self.linear1 = nn.Linear(d_model, hidden)
+        self.linear2 = nn.Linear(hidden, d_model)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -116,4 +115,4 @@ class PositionwiseFeedForward(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)
         x = self.linear2(x)
-        return x
+        return self.dropout(x)

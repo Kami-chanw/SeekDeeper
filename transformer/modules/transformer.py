@@ -44,7 +44,6 @@ class Transformer(nn.Module):
         ffn_hidden,
         n_layer,
         dropout,
-        device,
     ):
         """
         Constructor for the Transformer model.
@@ -60,7 +59,6 @@ class Transformer(nn.Module):
         :param ffn_hidden: Dimensionality of the feed-forward network.
         :param n_layer: Number of layers in the encoder and decoder.
         :param dropout: Dropout probability.
-        :param device: Device to run the model on.
         """
 
         super().__init__()
@@ -72,7 +70,6 @@ class Transformer(nn.Module):
             max_len=max_len,
             vocab_size=src_vocab_size,
             dropout=dropout,
-            device=device,
         )
 
         self.tgt_emb = TransformerEmbedding(
@@ -80,7 +77,6 @@ class Transformer(nn.Module):
             dropout=dropout,
             max_len=max_len,
             vocab_size=tgt_vocab_size,
-            device=device,
         )
 
         self.encoder = Encoder(
@@ -89,7 +85,6 @@ class Transformer(nn.Module):
             ffn_hidden=ffn_hidden,
             dropout=dropout,
             n_layer=n_layer,
-            device=device,
         )
 
         self.decoder = Decoder(
@@ -98,10 +93,9 @@ class Transformer(nn.Module):
             ffn_hidden=ffn_hidden,
             dropout=dropout,
             n_layer=n_layer,
-            device=device,
         )
 
-        self.linear = nn.Linear(d_model, tgt_vocab_size, device=device)
+        self.linear = nn.Linear(d_model, tgt_vocab_size)
 
         self._reset_parameters()
 

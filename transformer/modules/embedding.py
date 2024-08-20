@@ -5,20 +5,20 @@ import math
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model, max_len, device):
+    def __init__(self, d_model, max_len):
         super(PositionalEncoding, self).__init__()
 
         # Initialize position encoding matrix (shape: [max_len, d_model])
-        pe = torch.zeros(max_len, d_model, device=device)
+        pe = torch.zeros(max_len, d_model)
 
         # Create a tensor of shape [max_len, 1] with position indices
-        position = torch.arange(0, max_len, dtype=torch.float, device=device).unsqueeze(
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(
             1
         )
 
         # Compute the div_term (shape: [d_model//2]) for the sin and cos functions
         div_term = torch.exp(
-            torch.arange(0, d_model, 2, device=device).float()
+            torch.arange(0, d_model, 2).float()
             * (-math.log(10000.0) / d_model)
         )
 
@@ -36,11 +36,11 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerEmbedding(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len, dropout, device):
+    def __init__(self, vocab_size, d_model, max_len, dropout):
         super(TransformerEmbedding, self).__init__()
 
-        self.tok_emb = nn.Embedding(vocab_size, d_model, device=device)
-        self.pos_emb = PositionalEncoding(d_model, max_len, device)
+        self.tok_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = PositionalEncoding(d_model, max_len)
         self.drop_out = nn.Dropout(p=dropout)
 
     def forward(self, x):
