@@ -1,4 +1,4 @@
-[$$📖English ReadMe\]](./README.md)
+[📖English ReadMe](./README.md)
 ## Introduction
 
 ## Model details

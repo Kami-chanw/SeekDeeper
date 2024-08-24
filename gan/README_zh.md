@@ -1,4 +1,4 @@
-[\[📖English ReadMe\]](./README.md)
+[📖English ReadMe](./README.md)
 
 ## 介绍
 
@@ -64,13 +64,17 @@
 
 具体来说，生成器的目标是最大化判别器对生成样本的错误判定概率，即生成样本被判定为真实样本的概率。
   
-$$\min_{\mathrm{G}}\mathbb{E}_{\mathrm{z\sim p_z}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]$$
+```math
+\min_{\mathrm{G}}\mathbb{E}_{\mathrm{z\sim p_z}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]
+```
 
 其中，$G$ 是生成器，$D$ 是判别器，$x$ 是真实样本，$z$ 是随机噪声。
 
 判别器的目标是最大化对真实样本和生成样本的正确判定概率。
   
-$$\max_{\mathrm{D}}\mathbb{E}_{\mathrm{x}\sim\mathrm{p}_{\mathrm{data}}}\left[\log\mathrm{D}(\mathrm{x})\right]+\mathbb{E}_{\mathrm{z}\sim\mathrm{p}_{\mathrm{z}}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]$$
+```math
+\max_{\mathrm{D}}\mathbb{E}_{\mathrm{x}\sim\mathrm{p}_{\mathrm{data}}}\left[\log\mathrm{D}(\mathrm{x})\right]+\mathbb{E}_{\mathrm{z}\sim\mathrm{p}_{\mathrm{z}}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]
+```
 
 #### 生成器结构
 
@@ -159,11 +163,9 @@ DCGAN 在训练模式上与 GAN 完全相同，但是在结构设计上提出了
 
 这里每一层的 `kernel_size`、`stride` 和 `padding` 都需要精心设计，使得最终输出的图像大小满足要求。具体来说，可以按以下公式计算输出图像的大小（假设均在长宽相等的图上操作，即 $H=W$）：
 
-$$
-H_\text{out} = (H_\text{in}-1)\times \
-
-text{stride} + \text{kernel\_size}-2\times\text{padding}
-$$
+```math
+H_\text{out} = (H_\text{in}-1)\times \text{stride} + \text{kernel-size}-2\times\text{padding}
+```
 
 例如经过第 `(0)` 层后，中间特征图形状的变化为 `[z_dim, 1, 1]`$\rightarrow$`[512, 4, 4]`。
 
@@ -177,37 +179,43 @@ $$
 
 此外，Vanilla GAN 等价优化的距离衡量（KL 散度、JS 散度）不合理，而且缺少一个指标来衡量训练进程。基于上述考量，WGAN 提出使用最小化 Wasserstein Distance 来作为训练的目标
 
-$$W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]$$
+```math
+W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]
+```
 
 其中，$\Pi(P_r, P_g)$ 是所有边际分布为 $P_r$ 和 $P_g$ 的联合分布的集合。Wasserstein 距离度量了将一个分布转换为另一个分布所需的最小工作量。
 
 为了计算这个式子，作者将其转换为
 
-$$W(P_r,P_g)=\frac{1}{K}\sup_{\|f\|_L\leq K}\mathbb{E}_{x\sim P_r}\left[f(x)\right]-\mathbb{E}_{x\sim P_g}\left[f(x)\right]$$
+```math
+W(P_r,P_g)=\frac{1}{K}\sup_{\|f\|_L\leq K}\mathbb{E}_{x\sim P_r}\left[f(x)\right]-\mathbb{E}_{x\sim P_g}\left[f(x)\right]
+```
 
 其中，$f(x)$ 是我们将要用判别器去拟合的 1-Lipschitz 函数，用于衡量样本 $x$ 的真实性；$K$ 是 1-Lipschitz 常数。
 
 进一步地，我们使用参数 $w$ 来参数化所有的 $f_w(x)$，此时求解上式近似于求解
 
-$$K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\mathbb{E}_{x\sim P_g}[f_w(x)]$$
+```math
+K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\mathbb{E}_{x\sim P_g}[f_w(x)]
+```
 
 我们使用判别器去拟合 $f_w(x)$，那么判别器的训练目标为
 
-$$
+```math
 \max_D\mathbb{E}_{x \sim P_r} [D(x)] - \mathbb{E}_{x \sim P_g} [D(x)]
-$$
+```
 
 生成器的目标与判别器相反，即最小化上式的后一项：
 
-$$
+```math
 \min_G -\mathbb{E}_{x \sim P_g} [D(x)]
-$$
+```
 
 至此，我们已经简要说明了 WGAN 的优化目标。但是由于 $f_w(x)$ 必须满足 1-Lipschitz 条件，WGAN 直接使用了权重裁剪，将判别器的权重限制到一个范围内。然而这样暴力的做法直接限制了模型的表达能力，因此 WGAN-GP 提出使用梯度惩罚来限制权重。只需要在 WGAN 损失函数加上一项即可
 
-$$
+```math
 \mathcal{L} = \mathbb{E}_{\tilde{x} \sim P_g} \left[D(G(z))\right] - \mathbb{E}_{x \sim P_r} \left[D(x)\right] + \lambda \mathbb{E}_{\hat{x} \sim P_{\hat{x}}} \left[\left(\|\nabla_{\hat{x}} D(\hat{x})\|_2 - 1\right)^2\right]
-$$
+```
 
 其中，$\hat{x}$ 是生成数据和真实数据之间的线性插值样本，即 $\hat{x} = \alpha x + (1 - \alpha) G(z)$。
 

@@ -1,5 +1,4 @@
-[$$📖中文 ReadMe\]](./README_zh.md)
-[$$ 📖 English ReadMe]](./README.md)  
+[📖中文 ReadMe](./README_zh.md)
 ## Introduction  
 In this GPT implementation, I will demonstrate how to pre-train on the [BookCorpus](https://huggingface.co/datasets/bookcorpus/bookcorpus) dataset, then load the official pre-trained weights from [huggingface](https://huggingface.co/openai-community/openai-gpt) into our model, fine-tune on the [Stanford Sentiment Treebank (SST-2)](https://nlp.stanford.edu/~socherr/EMNLP2013_RNTN.pdf) dataset, and replicate the results mentioned in the paper.
 
@@ -75,7 +74,7 @@ Since the [BookCorpus](https://huggingface.co/datasets/bookcorpus/bookcorpus) da
 
 #### Training  
 1. Pre-tokenization: Use [`ftfy`](https://github.com/rspeer/python-ftfy) to normalize Unicode characters, unify non-standard punctuation, replace all whitespace characters with `\n`, and then tokenize using spacy's [en_core_web_sm](https://spacy.io/models/en#en_core_web_sm) model (see [bpe.py](./modules/bpe.py)).  
-2. Initialize the vocabulary: Split the entire text corpus into single-character subword units, appending `</w>` to the last character. As shown in the trained vocabulary file [encoder_bpe_40000.json](./datasets/bookcorpus/encoder_bpe_40000.json), ids 1~238 are single characters, and 239~476 are in the form of a single character + `</w>`. The `</w>` here represents the end of a token. For example, in the word `bamboo`, the last `o` is treated as `o</w>` to distinguish it from the second-to-last `o`.  
+2. Initialize the vocabulary: Split the entire text corpus into single-character subword units, appending `</w>` to the last character. As shown in the trained vocabulary file [encoder_bpe_40000.json](./datasets/bookcorpus/encoder_bpe_40000.json), ids 1-238 are single characters, and 239-476 are in the form of a single character + `</w>`. The `</w>` here represents the end of a token. For example, in the word `bamboo`, the last `o` is treated as `o</w>` to distinguish it from the second-to-last `o`.  
 3. Count the frequency of bi-gram character pairs.  
 4. Merge the most frequently occurring character pairs and form a new subword unit. Update the vocabulary in the corpus and record this merge operation.  
 5. Repeat steps 3-4 for 40000 times, creating 40000 new subword units based on the 476 single characters. Adding `<unk>` and `\n</w>` results in a total of 40478 tokens.
@@ -94,7 +93,7 @@ Since the [BookCorpus](https://huggingface.co/datasets/bookcorpus/bookcorpus) da
 1. Create a reverse mapping from the vocabulary and map the given token ids back to the original subwords.
   
 ## [Pre-training](./pretrain.ipynb)  
-Based on the setup in [Improving Language Understanding by Generative Pre-Training](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf) Sec. 4.1, we use AdamW ($w = 0.01, \text{max\_lr} = 2.4\times 10^{-4}$) as the optimizer on the BooksCorpus dataset. Note: **no weight decay is applied to the parameters in bias and scaling layers (`LayerNorm`)**. The learning rate is linearly increased from 0 over 2000 steps to $\text{max\_lr}$, followed by a cosine annealing learning rate schedule. The model is trained for 100 epochs on randomly sampled minibatches of 64 continuous sequences of 512 tokens each.
+Based on the setup in [Improving Language Understanding by Generative Pre-Training](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf) Sec. 4.1, we use AdamW ($w = 0.01, \text{max-lr} = 2.4\times 10^{-4}$) as the optimizer on the BooksCorpus dataset. Note: **no weight decay is applied to the parameters in bias and scaling layers (`LayerNorm`)**. The learning rate is linearly increased from 0 over 2000 steps to $\text{max-lr}$, followed by a cosine annealing learning rate schedule. The model is trained for 100 epochs on randomly sampled minibatches of 64 continuous sequences of 512 tokens each.
 
 To sample the specified number of continuous token sequences, we need to first convert the text in the original dataset to token ids using bpe. However, our custom tokenization implementation is very slow, so experiments are conducted on a small portion of the dataset. If you wish to try more data, you can modify the `loading_ratio` parameter in `load_data` within [pretrain.ipynb](./pretrain.ipynb).
 

@@ -1,4 +1,4 @@
-[$$📖中文 ReadMe\]](./README_zh.md)
+[```📖中文 ReadMe\]](./README_zh.md)
 ## Introduction
 Here, I have implemented a Transformer and used it for an English-to-German translation task on the IWSLT 2017 dataset (see [here](./train.ipynb)). After training the model, you can load the model and perform inference [here](./inference.ipynb).
 
@@ -15,19 +15,19 @@ The Encoder and Decoder use two types of masks, `src_mask` and `tgt_mask`. `src_
 Since the Transformer lacks the natural sequential characteristics of RNNs and loses order information when computing attention, positional encoding is introduced. In the original paper, the calculation formulas for positional encoding are as follows:
 
 - For even dimensions:
-  $$
+  ```math
    \text{PE}(pos, 2i) = \sin\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)
-  $$
+  ```
 
 - For odd dimensions:
-  $$ 
+  ```math
   \text{PE}(pos, 2i+1) = \cos\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right) 
-  $$
+  ```
 
 For numerical stability, we take the exponent and logarithm of the div term:
-$$
-\text{div\_ term} = 10000^{2i/d_{\text{model}}} = \exp\left(\frac{2i \cdot -\log(10000)}{d_{\text{model}}}\right)
-$$
+```math
+\text{div-term} = 10000^{2i/d_{\text{model}}} = \exp\left(\frac{2i \cdot -\log(10000)}{d_{\text{model}}}\right)
+```
 
 Positional encoding is the same for any sequence, so the shape of the positional encoding is `[seq_len, d_model]`. It is added to the input embedding with shape `[batch_size, seq_len, d_model]` through broadcasting to obtain the Encoder's input, denoted as $x_0$.
 
@@ -68,9 +68,9 @@ out = W_cat(out)
 ```
 
 Scaled Dot-Product Attention is represented by the formula:
-$$
+```math
 \text{Attention}(Q,K,V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_{key}}}\right) \cdot V
-$$
+```
 
 ## [Decoder](./modules/decoder.py)
 The Decoder differs from the Encoder by having an additional cross-attention layer and using masked multi-head attention. Since the model cannot access future information here, this attention mechanism is also called causal self-attention.
@@ -100,7 +100,9 @@ The paper also mentions training the base transformer for 100,000 iterations, wh
 ### Optimizer
 [Attention is all you need](https://arxiv.org/pdf/1706.03762) Sec 5.3 mentions using Adam as the optimizer with parameters $\beta_1 = 0.9, \beta_2 = 0.98, \epsilon = 10^{-9}$. Additionally, the learning rate changes during training according to the following formula:
 
-$$lrate=d_{\mathrm{model}}^{-0.5}\cdot\min(step\_ num^{-0.5},step\_ num\cdot warmup\_ steps^{-1.5})$$
+```math
+lrate=d_{\mathrm{model}}^{-0.5}\cdot\min(step\_ num^{-0.5},step\_ num\cdot warmup\_ steps^{-1.5})
+```
 
 This means linearly increasing the learning rate in the first $warmup_steps$ training steps, then decreasing it proportionally to the inverse square root of the step number. The base transformer was trained for 100,000 steps, with $warmup\_ steps = 4000$ under this setting. The visualization of learning rate is shown as below
 <div style="text-align: center;">
@@ -113,15 +115,15 @@ This means linearly increasing the learning rate in the first $warmup_steps$ tra
 
 For a classification task with $C$ classes, the smoothed target distribution $y_{\text{smooth}}$ for each sample $x$ is defined as:
 
-$$y_{\text{smooth}} = (1 - \epsilon) \cdot y_{\text{one-hot}} + (1-y_{\text{one-hot}})\cdot \frac{\epsilon}{C-1}$$
+```math
+y_{\text{smooth}} = (1 - \epsilon) \cdot y_{\text{one-hot}} + (1-y_{\text{one-hot}})\cdot \frac{\epsilon}{C-1}
+```
 
 where $\epsilon$ is the smoothing parameter, defaulting to 0.1. $y_{\text{one-hot}}$ is the original one-hot label.
 
 You can modify `eps_ls` in [config.py](./config.py) to control the value of $\epsilon$. If $\epsilon=0$, label smoothing is disabled, and cross-entropy is used as the loss function.
 
 ## Evaluation
-To evaluate the effectiveness of the machine translation, this implementation follows the setup from [Attention is all you need](https://arxiv.org/pdf/1706.03762) and uses the [BLEU](https://aclanthology.org/P02-1040.pdf) score. The specific process involves passing the source and target languages through the forward process of the transformer, then using greedy decode to select the token with the highest probability from the decoder output as the prediction. The BLEU score is then calculated using [sacrebleu](https://github.com/mjpost/s
-
-acrebleu).
+To evaluate the effectiveness of the machine translation, this implementation follows the setup from [Attention is all you need](https://arxiv.org/pdf/1706.03762) and uses the [BLEU](https://aclanthology.org/P02-1040.pdf) score. The specific process involves passing the source and target languages through the forward process of the transformer, then using greedy decode to select the token with the highest probability from the decoder output as the prediction. The BLEU score is then calculated using [sacrebleu](https://github.com/mjpost/sacrebleu).
 
 To further improve the translation quality, beam search can be used as the decode method, and contributions are welcome :) .

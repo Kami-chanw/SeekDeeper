@@ -1,4 +1,4 @@
-[\[📖中文 ReadMe\]](./README_zh.md)
+[📖中文 ReadMe](./README_zh.md)
 
 ## Introduction
 
@@ -64,13 +64,17 @@ Generative Adversarial Networks consist of two networks: a generator and a discr
 
 Specifically, the generator's goal is to maximize the discriminator's error rate on generated samples, i.e., the probability that generated samples are classified as real.
 
-$$\min_{\mathrm{G}}\mathbb{E}_{\mathrm{z\sim p_z}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]$$
+```math
+\min_{\mathrm{G}}\mathbb{E}_{\mathrm{z\sim p_z}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]
+```
 
 where $G$ is the generator, $D$ is the discriminator, $x$ is a real sample, and $z$ is random noise.
 
 The discriminator's goal is to maximize the correct classification rate of real and generated samples.
 
-$$\max_{\mathrm{D}}\mathbb{E}_{\mathrm{x}\sim\mathrm{p}_{\mathrm{data}}}\left[\log\mathrm{D}(\mathrm{x})\right]+\mathbb{E}_{\mathrm{z}\sim\mathrm{p}_{\mathrm{z}}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]$$
+```math
+\max_{\mathrm{D}}\mathbb{E}_{\mathrm{x}\sim\mathrm{p}_{\mathrm{data}}}\left[\log\mathrm{D}(\mathrm{x})\right]+\mathbb{E}_{\mathrm{z}\sim\mathrm{p}_{\mathrm{z}}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]
+```
 
 #### Generator Structure
 
@@ -159,9 +163,9 @@ The following pseudo-code shows a generator for the MNIST dataset. The input is 
 
 Each layer's `kernel_size`, `stride`, and `padding` need to be carefully designed to ensure the final output image size is as required. Specifically, the output image size can be calculated using the formula (assuming equal height and width, i.e., $H=W$):
 
-$$
-H_\text{out} = (H_\text{in}-1)\times \text{stride} + \text{kernel\_size}-2\times\text{padding}
-$$
+```math
+H_\text{out} = (H_\text{in}-1)\times \text{stride} + \text{kernel-size}-2\times\text{padding}
+```
 
 For example, after the first layer `(0)`, the intermediate feature map shape changes from `[z_dim, 1, 1]` to `[512, 4, 4]`.
 
@@ -177,37 +181,43 @@ In the precursor paper to WGAN, [Towards Principled Methods for Training Generat
 
 Moreover, the distance metrics optimized in Vanilla GAN (KL divergence, JS divergence) are not reasonable and lack a measure to track training progress. To address these issues, WGAN proposes minimizing the Wasserstein Distance as the training objective.
 
-$$W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]$$
+```math
+W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]
+```
 
 where $\Pi(P_r, P_g)$ is the set of all joint distributions whose marginals are $P_r$ and $P_g$. The Wasserstein distance measures the minimum cost to transport mass in transforming one distribution into another.
 
 To calculate this, the authors reformulate it as:
 
-$$W(P_r,P_g)=\frac{1}{K}\sup_{\|f\|_L\leq K}\mathbb{E}_{x\sim P_r}\left[f(x)\right]-\mathbb{E}_{x\sim P_g}\left[f(x)\right]$$
+```math
+W(P_r,P_g)=\frac{1}{K}\sup_{\|f\|_L\leq K}\mathbb{E}_{x\sim P_r}\left[f(x)\right]-\mathbb{E}_{x\sim P_g}\left[f(x)\right]
+```
 
 where $f(x)$ is the 1-Lipschitz function parameterized by $w$ that we aim to fit with the discriminator. $K$ is the Lipschitz constant.
 
 Using parameters $w$ to approximate all $f_w(x)$, solving the above equation is approximated by:
 
-$$K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\mathbb{E}_{x\sim P_g}[f_w(x)]$$
+```math
+K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\mathbb{E}_{x\sim P_g}[f_w(x)]
+```
 
 Using the discriminator to fit $f_w(x)$, the training objective for the discriminator is:
 
-$$
+```math
 \max_D\mathbb{E}_{x \sim P_r} [D(x)] - \mathbb{E}_{x \sim P_g} [D(x)]
-$$
+```
 
 The generator's objective is the opposite of the discriminator's, i.e., minimizing the second term:
 
-$$
+```math
 \min_G -\mathbb{E}_{x \sim P_g} [D(x)]
-$$
+```
 
 This briefly explains the optimization objective of WGAN. However, since $f_w(x)$ must satisfy the 1-Lipschitz condition, WGAN directly uses weight clipping to restrict the discriminator's weights within a range. This brute force approach limits the model's expressiveness, leading to WGAN-GP, which uses gradient penalty to constrain the weights. This is achieved by adding a term to the WGAN loss function:
 
-$$
+```math
 \mathcal{L} = \mathbb{E}_{\tilde{x} \sim P_g} \left[D(G(z))\right] - \mathbb{E}_{x \sim P_r} \left[D(x)\right] + \lambda \mathbb{E}_{\hat{x} \sim P_{\hat{x}}} \left[\left(\|\nabla_{\hat{x}} D(\hat{x})\|_2 - 1\right)^2\right]
-$$
+```
 
 where $\hat{x}$ is a linear interpolation between real and generated samples, $\hat{x} = \alpha x + (1 - \alpha) G(z)$.
 
