@@ -1,11 +1,10 @@
-from dataclasses import dataclass
 from typing import Sequence, Union
 
 import torch
 import torch.nn.functional as F
 from torch.optim.optimizer import Optimizer
 
-from modules import make_pad_mask, make_tgt_mask
+from modules import make_pad_mask
 import data
 import config
 

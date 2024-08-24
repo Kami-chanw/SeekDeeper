@@ -1,6 +1,6 @@
 import os
 from math import ceil
-from typing import Optional, Callable
+from typing import Optional, Callable, Sequence
 
 import datasets
 from datasets import DownloadManager
@@ -10,33 +10,34 @@ from torch.utils.data import Dataset, DataLoader
 import config
 from modules.bpe import BPETokenizer
 
+SOS_TOKEN = "<start>"
+CLF_TOKEN = "<extract>"
+PAD_TOKEN = "<pad>"
+
+special_tokens = [SOS_TOKEN, CLF_TOKEN, PAD_TOKEN]
+
 
 class TokenIDDataset(Dataset):
 
-    def __init__(
-        self, data_source, num_token_per_item: int, extract_token_id_fn: Callable
-    ):
+    def __init__(self, data_source, num_token_per_item: int):
         """
         This class is used to read continuous max_len tokens from data_source.
 
         Args:
             data_source:
-                A dataset where each item contains token ids of a sentence.
+                A BookCorpus dataset where each item contains token ids of a sentence.
             num_token_per_item (int):
                 The number of token ids of an item.
-            extract_token_id_fn (Callable):
-                A function that takes an item in data_source and returns token ids.
         """
         super().__init__()
         self.data_source = data_source
         self.num_token_per_item = num_token_per_item
-        self.extract_token_id_fn = extract_token_id_fn
 
     def __getitem__(self, index):
         rest_length = self.num_token_per_item
         sequence = []
         while rest_length > 0:
-            token_ids = list(self.extract_token_id_fn(self.data_source[index]))
+            token_ids = self.data_source[index]["text"]
             sequence.extend(token_ids[:rest_length])
             rest_length -= len(token_ids)
             index += 1
@@ -45,13 +46,16 @@ class TokenIDDataset(Dataset):
     def __len__(self):
         accumulate_length = 0
         for i, example in enumerate(reversed(self.data_source)):
-            accumulate_length += len(self.extract_token_id_fn(example))
+            accumulate_length += len(example["text"])
             if accumulate_length >= self.num_token_per_item:
                 return len(self.data_source) - i
         return 0
 
 
-def _load_bookcorpus(tokenizer, loading_ratio, num_proc):
+def _load_bookcorpus(tokenizer, loading_ratio, num_proc, splits):
+    if not splits is None and splits != ["train"]:
+        raise ValueError('Splits must be ["train"] or None.')
+
     def tokenize(example):
         example["text"] = tokenizer.encode(example["text"], verbose=False)
         return example
@@ -77,32 +81,78 @@ def _load_bookcorpus(tokenizer, loading_ratio, num_proc):
         tokenize, load_from_cache_file=True, num_proc=num_proc, batched=True
     )
 
-    return DataLoader(
-        TokenIDDataset(
-            subset,
-            num_token_per_item=config.max_len,
-            extract_token_id_fn=lambda example: example["text"],
-        ),
-        batch_size=config.TrainConfig.batch_size,
-        shuffle=True,
-    )
+    return [
+        DataLoader(
+            TokenIDDataset(subset, num_token_per_item=config.max_len),
+            batch_size=config.PretrainConfig.batch_size,
+            shuffle=True,
+        )
+    ]
 
 
-def _load_cola(tokenizer, loading_ratio, num_proc):
-    pass
+def _load_sst2(tokenizer: BPETokenizer, loading_ratio, num_proc, splits):
+    all_splits = ["train", "validation", "test"]
+    if splits is None:
+        splits = all_splits
+    elif not set(splits).issubset(all_splits):
+        raise ValueError(f"Splits should only contain some of {all_splits}")
+
+    tokenizer.add_special_tokens(special_tokens)
+
+    def collate_fn(batch):
+        sentences, labels = [], []
+        for item in batch:
+            sentences.append(SOS_TOKEN + item["sentence"] + CLF_TOKEN)
+            labels.append(item["label"])
+        tokens = tokenizer.encode(
+            sentences,
+            padding=True,
+            pad_value=tokenizer.token_to_id(PAD_TOKEN),
+            verbose=False,
+        )
+        return torch.tensor(tokens, dtype=torch.long), torch.tensor(
+            labels, dtype=torch.long
+        )
+
+    dataset = datasets.load_dataset("stanfordnlp/sst2", num_proc=num_proc)
+
+    dataloaders = []
+
+    for split in splits:
+        ds = dataset[split]
+        subset = ds.select(range(int(loading_ratio * len(ds))))
+        dataloaders.append(
+            DataLoader(
+                subset,
+                config.FinetuningConfig.batch_size,
+                collate_fn=collate_fn,
+                shuffle=split == "train",
+            )
+        )
+
+    return dataloaders
 
 
-def load_data(name: str, loading_ratio: float = 1, num_proc: Optional[int] = None):
-    dispatch = {
+def load_data(
+    name: str,
+    loading_ratio: float = 1,
+    num_proc: Optional[int] = None,
+    splits: Sequence[str] = None,
+):
+    dispatch = {  # _load_* should return a list of dataloader
         "bookcorpus": _load_bookcorpus,
-        "cola": _load_cola,
+        "sst2": _load_sst2,
     }
-    assert name.lower() in dispatch
+    assert (
+        name.lower() in dispatch
+    ), f"Unsupported dataset, should be one of {list(dispatch.keys())}"
     assert 0 < loading_ratio <= 1
 
     tokenizer = BPETokenizer(
-        os.path.join(config.bookcorpus_dir, "encoder_bpe_40000.json"),
-        os.path.join(config.bookcorpus_dir, "vocab_40000.bpe"),
+        config.bookcorpus_dir / "encoder_bpe_40000.json",
+        config.bookcorpus_dir / "vocab_40000.bpe",
     )
 
-    return dispatch[name.lower()](tokenizer, loading_ratio, num_proc)
+    return tokenizer, *dispatch[name.lower()](
+        tokenizer, loading_ratio, num_proc, splits
+    )

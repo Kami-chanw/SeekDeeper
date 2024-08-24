@@ -1,4 +1,14 @@
+import os
 from dataclasses import dataclass
+from pathlib import Path
+
+import torch
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+    str(i) for i in range(torch.cuda.device_count())
+)
+
+torch.manual_seed(3407)
 
 # model parameter setting
 max_len = 512
@@ -8,29 +18,39 @@ n_head = 12
 vocab_size = 40478
 dropout = 0.1
 
+
 @dataclass
 class PretrainConfig:
     n_epoch = 100
-    batch_size = 64
+    batch_size = 16
+    update_freq = 4
     lr = 2.5e-4
-    warmup_step = 2000
+    warmup_steps = 2000
 
 
 @dataclass
-class TrainConfig:
+class FinetuningConfig:
     n_epoch = 3
     batch_size = 32
+    update_freq = 1
     lr = 6.25e-5
-    loss_weight = 0.5
-    warmup_ratio = 0.2 / 100
+    clf_loss_weight = 0.5
+    warmup_steps = 0.2 / 100
+
 
 # path
-checkpoint_dir = "./checkpoints"
-bookcorpus_dir = "./datasets/bookcorpus"
+base_dir = Path(__file__).parent.resolve()
+checkpoint_dir = base_dir / "checkpoints"
+bookcorpus_dir = base_dir / "datasets" / "bookcorpus"
 
+# if you downloaded pretrained gpt in an automatical manner, set pretrained_dir to "openai-community/openai-gpt"
+# otherwise, you can obtain pretrained model with huggingface-cli, see README.md appendix
+pretrained_dir = checkpoint_dir / "gpt"
+
+os.makedirs(checkpoint_dir, exist_ok=True)
 
 # optimizer args
-adamwr_w = 1e-2
+weight_decay = 1e-2
 clip = 1
 
 # inference

@@ -20,7 +20,7 @@ special_tokens = [SOS_TOKEN, EOS_TOKEN, PAD_TOKEN, UNK_TOKEN]
 
 
 def build_tokenizer(dataset, lang, force_reload):
-    tokenizer_path = os.path.join(config.dataset_dir, f"tokenizer-{lang}.json")
+    tokenizer_path = config.dataset_dir / f"tokenizer-{lang}.json"
     if os.path.exists(tokenizer_path) and not force_reload:
         tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN)).from_file(tokenizer_path)
     else:
@@ -56,17 +56,24 @@ def load_data(
     src_lang, tgt_lang, splits: Optional[Sequence[str]] = None, force_reload=False
 ):
     """
-    Load IWSLT 2017 dataset. The raw data should be downloaded at `config.dataset_dir` by running download.py first.
+    Load IWSLT 2017 dataset..
     Args:
-        src_lang (str): Source language, which depends on which language pair you download.
-        tgt_lang (str): Target language, which depends on which language pair you download.
-        splits (`Sequence[str]` or `None`, defaults to `None`): The splits you want to load. It can be arbitrary combination of "train", "test" and "valid".
-        force_reload (`bool`, defaults to `False`): If set to `True`, it will re-train a new tokenizer with BPE.
+        src_lang (str): 
+            Source language, which depends on which language pair you download.
+        tgt_lang (str): 
+            Target language, which depends on which language pair you download.
+        splits (`Sequence[str]`, *optional*): 
+            The splits you want to load. It can be arbitrary combination of "train", "test" and "validation".
+            If not speficied, all splits will be loaded.
+        force_reload (`bool`, defaults to `False`): 
+            If set to `True`, it will re-train a new tokenizer with BPE.
     """
     if sorted((src_lang, tgt_lang)) != ["de", "en"]:
         raise ValueError("Available language options are ('de','en') and ('en', 'de')")
     all_splits = ["train", "validation", "test"]
-    if not set(splits).issubset(all_splits):
+    if splits is None:
+        splits = all_splits
+    elif not set(splits).issubset(all_splits):
         raise ValueError(f"Splits should only contain some of {all_splits}")
 
     dataset = datasets.load_dataset(

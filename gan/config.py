@@ -1,5 +1,11 @@
-import torch
 import os
+from pathlib import Path
+
+import torch
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+    str(i) for i in range(torch.cuda.device_count())
+)
 
 torch.manual_seed(3407)
 
@@ -28,12 +34,13 @@ num_samples = 64  # Number of images to generate each sampling
 
 
 # path
-dataset_root = "./datasets"
-ckpt_mnist_dir = "./checkpoints/mnist"
-sample_mnist_dir = "./samples/mnist"
+base_dir = Path(__file__).parent.resolve()
+dataset_root = base_dir / "datasets"
+ckpt_mnist_dir = base_dir / "checkpoints" / "mnist"
+sample_mnist_dir = base_dir / "samples" / "mnist"
 
-ckpt_cifar10_dir = "./checkpoints/cifar10"
-sample_cifar10_dir = "./samples/cifar10"
+ckpt_cifar10_dir = base_dir / "checkpoints" / "cifar10"
+sample_cifar10_dir = base_dir / "samples" / "cifar10"
 
 os.makedirs(ckpt_mnist_dir, exist_ok=True)
 os.makedirs(ckpt_cifar10_dir, exist_ok=True)

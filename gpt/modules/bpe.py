@@ -6,6 +6,7 @@ https://github.com/openai/finetune-transformer-lm/blob/master/text_utils.py
 """
 
 import re
+from typing import List, Optional, Union
 import ftfy
 import json
 import spacy
@@ -70,6 +71,24 @@ class BPETokenizer(object):
         merges = [tuple(merge.split()) for merge in merges]
         self.bpe_ranks = dict(zip(merges, range(len(merges))))
         self.cache = {}
+        self.special_tokens = {"</w>"}
+
+    def add_special_tokens(self, new_tokens: List[str]):
+        start_idx = len(self.encoder)
+
+        for i, token in enumerate(new_tokens):
+            if token in self.encoder:
+                raise ValueError(f"Token '{token}' already exists in the encoder.")
+
+            self.encoder[token] = start_idx + i
+            self.decoder[start_idx + i] = token
+
+            # no need to update BPE ranks for special tokens as they are not merged
+            self.cache[token] = token
+        self.special_tokens.update(new_tokens)
+
+    def get_vocab_size(self):
+        return len(self.encoder)
 
     def bpe(self, token):
         word = tuple(token[:-1]) + (token[-1] + "</w>",)
@@ -125,9 +144,35 @@ class BPETokenizer(object):
         self.cache[token] = word
         return word
 
-    def encode(self, texts, verbose=True):
+    def token_to_id(self, token: str) -> int:
+        return self.encoder.get(token, 0)
+
+    def encode(
+        self,
+        texts: Union[str, List[str]],
+        padding: bool = False,
+        pad_value: Optional[int] = None,
+        verbose: bool = True,
+    ) -> List[List[int]]:
+        """
+        Encodes a list of texts into lists of token IDs. Optionally pads the sequences
+        to the length of the longest sequence.
+
+        Args:
+            texts (Union[str, List[str]]): A single text string or a list of text strings to encode.
+            padding (bool): If True, pad all sequences to the length of the longest sequence.
+            pad_value (Optional[int]): The value to use for padding. If None, 0 is used.
+            verbose (bool): If True, displays a progress bar.
+
+        Returns:
+            List[List[int]]: A list of lists containing the token IDs.
+        """
+        if not isinstance(texts, list):
+            texts = [texts]
+
         texts_tokens = []
         bar = tqdm(texts, ncols=80, leave=False) if verbose else texts
+
         for text in bar:
             text = self.nlp(text_standardize(ftfy.fix_text(text)))
             text_tokens = []
@@ -140,17 +185,31 @@ class BPETokenizer(object):
                 )
             texts_tokens.append(text_tokens)
 
+        if padding:
+            max_length = max(len(tokens) for tokens in texts_tokens)
+            pad_value = pad_value if pad_value is not None else 0
+
+            for i in range(len(texts_tokens)):
+                texts_tokens[i] = texts_tokens[i] + [pad_value] * (
+                    max_length - len(texts_tokens[i])
+                )
+
         return texts_tokens
 
-    def decode(self, bpe_idx):
-        """list of integers comes in, string comes out"""
+    def decode(
+        self, bpe_idx: Union[List[List[int]], List[int]], skip_special_tokens=True
+    ):
+        """lists of integers comes in, a list of string comes out"""
         if not isinstance(bpe_idx[0], list):
             bpe_idx = [bpe_idx]
 
-        text = []
+        texts = []
         for idx in bpe_idx:
             # inverse map the integers to get the tokens
             tokens_merged = [self.decoder[token] for token in idx]
-            text.append("".join(tokens_merged).replace("</w>", " "))
+            text = "".join(tokens_merged)
+            if skip_special_tokens:
+                text = re.sub("|".join(self.special_tokens), " ", text)
+            texts.append(text)
 
-        return text
+        return texts

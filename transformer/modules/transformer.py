@@ -95,7 +95,7 @@ class Transformer(nn.Module):
             n_layer=n_layer,
         )
 
-        self.linear = nn.Linear(d_model, tgt_vocab_size)
+        self.linear = nn.Linear(d_model, tgt_vocab_size, bias=False)
 
         self._reset_parameters()
 
