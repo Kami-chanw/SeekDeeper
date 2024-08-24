@@ -109,11 +109,6 @@ In Sec. 3.2 of the original paper, it is mentioned that adding a language modeli
 
 Fine-tuning generally reuses the hyperparameter settings from pre-training. A dropout layer ($p = 0.1$) is added before the classifier. The learning rate is set to $6.25e^{-5}$, and the batch size is set to 32. In most cases, training for 3 epochs is sufficient. Additionally, a linear learning rate decay strategy with warmup is used, with a warmup proportion of $0.2\%$ of the total training steps. The weight of the classification loss is set to 0.5.
 
-## [Inference
-
-](./inference.ipynb)  
-During inference, we will load the pre-trained parameters into our GPT model and compare its generative capabilities with the fine-tuned model. We also evaluate the fine-tuned model's performance on the SST-2 test set, achieving 91% accuracy, which aligns with the original paper's results.
-
 ## Appendix  
 ### How to download pretrained GPT?  
 Run the following command in the terminal  
