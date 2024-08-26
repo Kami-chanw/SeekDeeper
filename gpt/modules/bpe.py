@@ -150,23 +150,8 @@ class BPETokenizer(object):
     def encode(
         self,
         texts: Union[str, List[str]],
-        padding: bool = False,
-        pad_value: Optional[int] = None,
         verbose: bool = True,
     ) -> List[List[int]]:
-        """
-        Encodes a list of texts into lists of token IDs. Optionally pads the sequences
-        to the length of the longest sequence.
-
-        Args:
-            texts (Union[str, List[str]]): A single text string or a list of text strings to encode.
-            padding (bool): If True, pad all sequences to the length of the longest sequence.
-            pad_value (Optional[int]): The value to use for padding. If None, 0 is used.
-            verbose (bool): If True, displays a progress bar.
-
-        Returns:
-            List[List[int]]: A list of lists containing the token IDs.
-        """
         if not isinstance(texts, list):
             texts = [texts]
 
@@ -184,16 +169,7 @@ class BPETokenizer(object):
                     ]
                 )
             texts_tokens.append(text_tokens)
-
-        if padding:
-            max_length = max(len(tokens) for tokens in texts_tokens)
-            pad_value = pad_value if pad_value is not None else 0
-
-            for i in range(len(texts_tokens)):
-                texts_tokens[i] = texts_tokens[i] + [pad_value] * (
-                    max_length - len(texts_tokens[i])
-                )
-
+            
         return texts_tokens
 
     def decode(

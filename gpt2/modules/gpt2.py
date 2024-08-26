@@ -5,108 +5,15 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-
-class CausalSelfAttention(nn.Module):
-    def __init__(self, d_model, n_head, max_len, dropout):
-        super().__init__()
-        assert d_model % n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(d_model, 3 * d_model)
-        # output projection
-        self.c_proj = nn.Linear(d_model, d_model)
-        # regularization
-        self.attn_dropout = nn.Dropout(dropout)
-        self.resid_dropout = nn.Dropout(dropout)
-        self.n_head = n_head
-        self.d_model = d_model
-        self.dropout = dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(max_len, max_len)).view(1, 1, max_len, max_len),
-            )
-
-    def forward(self, x):
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (d_model)
-
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.d_model, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-            )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
-        )  # re-assemble all head outputs side by side
-
-        # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        return y
+from .layers import Block
 
 
-class Block(nn.Module):
-    def __init__(self, d_model, n_head, max_len, dropout):
-        super().__init__()
-        self.ln_1 = nn.LayerNorm(d_model)
-        self.attn = CausalSelfAttention(
-            d_model=d_model, n_head=n_head, max_len=max_len, dropout=dropout
-        )
-        self.ln_2 = nn.LayerNorm(d_model)
-        self.mlp = nn.ModuleDict(
-            dict(
-                c_fc=nn.Linear(d_model, 4 * d_model),
-                act=nn.GELU(),
-                c_proj=nn.Linear(4 * d_model, d_model),
-                dropout=nn.Dropout(dropout),
-            )
-        )
-        m = self.mlp
-        self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x))))
-
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlpf(self.ln_2(x))
-        return x
-
-
-class GPT(nn.Module):
+class GPT2(nn.Module):
     """GPT Language Model"""
 
     def __init__(self, vocab_size, max_len, d_model, n_head, n_layer, dropout):
         super().__init__()
-
+        self.max_len = max_len
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(vocab_size, d_model),
@@ -201,8 +108,7 @@ class GPT(nn.Module):
         config_args["max_len"] = 1024  # always 1024 for GPT model checkpoints
         config_args["dropout"] = 0.1
 
-        # create a from-scratch initialized minGPT model
-        model = GPT(**config_args)
+        model = GPT2(**config_args)
         sd = model.state_dict()
         sd_keys = sd.keys()
         sd_keys = [
@@ -246,7 +152,9 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def configure_optimizers(
+        self, lr, weight_decay, betas=(0.9, 0.999), device_type=None
+    ):
         # start with all of the candidate parameters
         param_dict = {pn: p for pn, p in self.named_parameters()}
         # filter out those that do not require grad
@@ -271,43 +179,34 @@ class GPT(nn.Module):
         fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == "cuda"
         extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
-        )
+        optimizer = torch.optim.AdamW(optim_groups, lr=lr, betas=betas, **extra_args)
         print(f"using fused AdamW: {use_fused}")
 
         return optimizer
 
-    def forward(self, idx, targets=None):
-        device = idx.device
-        b, t = idx.size()
+    def forward(self, input, input_mask=None):
+        device = input.device
+        b, t = input.size()
         assert (
             t <= self.max_len
         ), f"Cannot forward sequence of length {t}, block size is only {self.max_len}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
+        if input_mask is not None and input_mask.dim() == 2:
+            # [batch_size, seq_len] -> [batch_size, 1, 1, seq_len]
+            input_mask = input_mask.unsqueeze(1).unsqueeze(2)
+
         # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, d_model)
+        tok_emb = self.transformer.wte(
+            input
+        )  # token embeddings of shape (b, t, d_model)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, d_model)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, input_mask)
         x = self.transformer.ln_f(x)
 
-        if targets is not None:
-            # if we are given some desired targets also calculate the loss
-            logits = self.lm_head(x)
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-            )
-        else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(
-                x[:, [-1], :]
-            )  # note: using list [-1] to preserve the time dim
-            loss = None
-
-        return logits, loss
+        return self.lm_head(x)
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
@@ -320,7 +219,7 @@ class GPT(nn.Module):
             # if the sequence context is growing too long we must crop it at max_len
             idx_cond = idx if idx.size(1) <= self.max_len else idx[:, -self.max_len :]
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits = self(idx_cond)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options

@@ -8,16 +8,12 @@ I also tried to add as many comments as possible, my own understanding of what's
 going on.
 """
 
-import os
+from functools import lru_cache
 import json
+from typing import List, Optional, Union
 import regex as re
-import requests
 
-import torch
-
-# -----------------------------------------------------------------------------
-
-
+@lru_cache()
 def bytes_to_unicode():
     """
     Every possible byte (really an integer 0..255) gets mapped by OpenAI to a unicode
@@ -66,14 +62,20 @@ def get_pairs(word):
     return pairs
 
 
-class Encoder:
+class BPETokenizer:
 
-    def __init__(self, encoder, bpe_merges):
+    def __init__(self, encoder_path, bpe_path):
+        with open(bpe_path, "r", encoding="utf-8") as f:
+            bpe_data = f.read()
+        # light postprocessing: strip the version on first line and the last line is a blank
+        bpe_merges = [
+            tuple(merge_str.split()) for merge_str in bpe_data.split("\n")[1:-1]
+        ]
         # byte encoder/decoder
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
         # bpe token encoder/decoder
-        self.encoder = encoder
+        self.encoder = json.load(open(encoder_path))
         self.decoder = {v: k for k, v in self.encoder.items()}
         # bpe merge list that defines the bpe "tree", of tuples (a,b) that are to merge to token ab
         self.bpe_ranks = dict(zip(bpe_merges, range(len(bpe_merges))))
@@ -100,6 +102,24 @@ class Encoder:
             r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
         )
         self.cache = {}
+        self.special_tokens = {"<|endoftext|>"}
+
+    def add_special_tokens(self, new_tokens: List[str]):
+        start_idx = len(self.encoder)
+
+        for i, token in enumerate(new_tokens):
+            if token in self.encoder:
+                raise ValueError(f"Token '{token}' already exists in the encoder.")
+
+            self.encoder[token] = start_idx + i
+            self.decoder[start_idx + i] = token
+
+            # no need to update BPE ranks for special tokens as they are not merged
+            self.cache[token] = token
+        self.special_tokens.update(new_tokens)
+
+    def get_vocab_size(self):
+        return len(self.encoder)
 
     def bpe(self, token):
         """
@@ -167,134 +187,54 @@ class Encoder:
         self.cache[token] = word
         return word
 
-    def encode(self, text):
-        """string goes in, list of integers comes out"""
-        bpe_idx = []
-        # pre-tokenize the input text into string tokens (words, roughly speaking)
-        tokens = re.findall(self.pat, text)
-        # process each token into BPE integers
-        for token in tokens:
-            # encode the token as a bytes (b'') object
-            token_bytes = token.encode("utf-8")
-            # translate all bytes to their unicode string representation and flatten
-            token_translated = "".join(self.byte_encoder[b] for b in token_bytes)
-            # perform all the applicable bpe merges according to self.bpe_ranks
-            token_merged = self.bpe(token_translated).split(" ")
-            # translate all bpe tokens to integers
-            token_ix = [self.encoder[bpe_token] for bpe_token in token_merged]
-            # extend our running list of all output integers
-            bpe_idx.extend(token_ix)
-        return bpe_idx
+    def token_to_id(self, token: str) -> int:
+        return self.encoder.get(token, 0)
 
-    def encode_and_show_work(self, text):
-        """debugging function, same as encode but returns all intermediate work"""
-        bpe_idx = []
-        parts = []
-        tokens = re.findall(self.pat, text)
-        for token in tokens:
-            token_bytes = token.encode("utf-8")
-            token_translated = "".join(self.byte_encoder[b] for b in token_bytes)
-            token_merged = self.bpe(token_translated).split(" ")
-            token_ix = [self.encoder[bpe_token] for bpe_token in token_merged]
-            bpe_idx.extend(token_ix)
-            parts.append(
-                {
-                    "token": token,
-                    "token_bytes": token_bytes,
-                    "token_translated": token_translated,
-                    "token_merged": token_merged,
-                    "token_ix": token_ix,
-                }
-            )
-        out = {
-            "bpe_idx": bpe_idx,  # the actual output sequence
-            "tokens": tokens,  # result of pre-tokenization
-            "parts": parts,  # intermediates for each token part
-        }
-        return out
+    def encode(
+        self,
+        texts: Union[str, List[str]],
+    ):
+        """strings go in, lists of integers comes out"""
+        if not isinstance(texts, list):
+            texts = [texts]
+        indices = []
+        for text in texts:
+            bpe_idx = []
+            # pre-tokenize the input text into string tokens (words, roughly speaking)
+            tokens = re.findall(self.pat, text)
+            # process each token into BPE integers
+            for token in tokens:
+                # encode the token as a bytes (b'') object
+                token_bytes = token.encode("utf-8")
+                # translate all bytes to their unicode string representation and flatten
+                token_translated = "".join(self.byte_encoder[b] for b in token_bytes)
+                # perform all the applicable bpe merges according to self.bpe_ranks
+                token_merged = self.bpe(token_translated).split(" ")
+                # translate all bpe tokens to integers
+                token_ix = [self.encoder[bpe_token] for bpe_token in token_merged]
+                # extend our running list of all output integers
+                bpe_idx.extend(token_ix)
+            indices.append(bpe_idx)
+            
+        return indices
 
-    def decode(self, bpe_idx):
-        """list of integers comes in, string comes out"""
-        # inverse map the integers to get the tokens
-        tokens_merged = [self.decoder[token] for token in bpe_idx]
-        # inverse the byte encoder, e.g. recovering 'Ġ' -> ' ', and get the bytes
-        tokens_flat = "".join(tokens_merged)
-        tokens_bytes = bytearray([self.byte_decoder[c] for c in tokens_flat])
-        # recover the full utf-8 string
-        text = tokens_bytes.decode("utf-8", errors="replace")
-        return text
+    def decode(
+        self, bpe_idx: Union[List[List[int]], List[int]], skip_special_tokens=True
+    ):
+        """lists of integers come in, a list of string comes out"""
+        if not isinstance(bpe_idx[0], list):
+            bpe_idx = [bpe_idx]
 
-
-def get_file(local_file, remote_file):
-    """downloads remote_file to local_file if necessary"""
-    if not os.path.isfile(local_file):
-        print(f"downloading {remote_file} to {local_file}")
-        response = requests.get(remote_file)
-        open(local_file, "wb").write(response.content)
-
-
-def get_encoder():
-    """
-    Returns an instance of the GPT BPE Encoder/Decoder
-    and handles caching of "database" files.
-    """
-    home_dir = os.path.expanduser("~")
-    cache_dir = os.path.join(home_dir, ".cache", "mingpt")
-    os.makedirs(cache_dir, exist_ok=True)
-
-    # load encoder.json that has the raw mappings from token -> bpe index
-    encoder_local_file = os.path.join(cache_dir, "encoder.json")
-    encoder_remote_file = (
-        "https://openaipublic.blob.core.windows.net/gpt-2/models/124M/encoder.json"
-    )
-    get_file(encoder_local_file, encoder_remote_file)
-    with open(encoder_local_file, "r") as f:
-        encoder = json.load(f)
-    assert (
-        len(encoder) == 50257
-    )  # 256 individual byte tokens, 50,000 merged tokens, and 1 special <|endoftext|> token
-
-    # load vocab.bpe that contains the bpe merges, i.e. the bpe tree structure
-    # in the form tuples (a, b), that indicate that (a, b) is to be merged to one token ab
-    vocab_local_file = os.path.join(cache_dir, "vocab.bpe")
-    vocab_remote_file = (
-        "https://openaipublic.blob.core.windows.net/gpt-2/models/124M/vocab.bpe"
-    )
-    get_file(vocab_local_file, vocab_remote_file)
-    with open(vocab_local_file, "r", encoding="utf-8") as f:
-        bpe_data = f.read()
-    # light postprocessing: strip the version on first line and the last line is a blank
-    bpe_merges = [tuple(merge_str.split()) for merge_str in bpe_data.split("\n")[1:-1]]
-    assert len(bpe_merges) == 50000  # 50,000 merged tokens
-
-    # construct the Encoder object and return
-    enc = Encoder(encoder, bpe_merges)
-    return enc
-
-
-# -----------------------------------------------------------------------------
-
-
-class BPETokenizer:
-    """PyTorch-aware class that wraps the Encoder above"""
-
-    def __init__(self):
-        self.encoder = get_encoder()
-
-    def __call__(self, text, return_tensors="pt"):
-        # PyTorch only; here because we want to match huggingface/transformers interface
-        assert return_tensors == "pt"
-        # single string input for now, in the future potentially a list of strings
-        assert isinstance(text, str)
-        # encode and create a "batch dimension" of 1
-        idx = [self.encoder.encode(text)]
-        # wrap into PyTorch tensor
-        out = torch.tensor(idx, dtype=torch.long)
-        return out
-
-    def decode(self, idx):
-        # ensure a simple 1D tensor for now
-        assert idx.ndim == 1
-        # decode indices to text
-        text = self.encoder.decode(idx.tolist())
-        return text
+        texts = []
+        for idx in bpe_idx:
+            # inverse map the integers to get the tokens
+            tokens_merged = [self.decoder[token] for token in idx]
+            # inverse the byte encoder, e.g. recovering 'Ġ' -> ' ', and get the bytes
+            tokens_flat = "".join(tokens_merged)
+            tokens_bytes = bytearray([self.byte_decoder[c] for c in tokens_flat])
+            # recover the full utf-8 string
+            text = tokens_bytes.decode("utf-8", errors="replace")
+            if skip_special_tokens:
+                text = re.sub("|".join(self.special_tokens), " ", text)
+            texts.append(text)
+        return texts

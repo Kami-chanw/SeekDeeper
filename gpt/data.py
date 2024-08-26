@@ -1,20 +1,20 @@
-import os
 from math import ceil
-from typing import Optional, Callable, Sequence
+from typing import Optional, Sequence
 
 import datasets
 from datasets import DownloadManager
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
 
 import config
 from modules.bpe import BPETokenizer
 
 SOS_TOKEN = "<start>"
 CLF_TOKEN = "<extract>"
-PAD_TOKEN = "<pad>"
 
-special_tokens = [SOS_TOKEN, CLF_TOKEN, PAD_TOKEN]
+special_tokens = [SOS_TOKEN, CLF_TOKEN]
+pad_idx = 0  # reuse unk as pad token
 
 
 class TokenIDDataset(Dataset):
@@ -60,30 +60,28 @@ def _load_bookcorpus(tokenizer, loading_ratio, num_proc, splits):
         example["text"] = tokenizer.encode(example["text"], verbose=False)
         return example
 
-    num_parquet_files = ceil(loading_ratio * 10)
     # 10 files in total, but we may just use part of them
     URLS = [
         f"https://hf-mirror.com/datasets/bookcorpus/bookcorpus/resolve/refs%2Fconvert%2Fparquet/plain_text/train/000{i}.parquet?download=true"
-        for i in range(num_parquet_files)
+        for i in range(ceil(loading_ratio * 10))
     ]
 
     dl_manager = DownloadManager("bookcorpus")
     paths = dl_manager.download(URLS)
     print("Downloaded at ", paths)
 
-    dataset = datasets.load_dataset(
-        "parquet", data_files=paths, split="train", num_proc=num_proc
-    )
-
-    num_per_file = len(dataset) // num_parquet_files
-
-    subset = dataset.select(range(int(loading_ratio * 10 * num_per_file))).map(
-        tokenize, load_from_cache_file=True, num_proc=num_proc, batched=True
+    # 74004228 rows in total, see https://huggingface.co/datasets/bookcorpus/bookcorpus
+    dataset = (
+        datasets.load_dataset(
+            "parquet", data_files=paths, split="train", num_proc=num_proc
+        )
+        .select(range(int(loading_ratio * 74004228)))
+        .map(tokenize, load_from_cache_file=True, num_proc=num_proc, batched=True)
     )
 
     return [
         DataLoader(
-            TokenIDDataset(subset, num_token_per_item=config.max_len),
+            TokenIDDataset(dataset, num_token_per_item=config.max_len),
             batch_size=config.PretrainConfig.batch_size,
             shuffle=True,
         )
@@ -106,13 +104,12 @@ def _load_sst2(tokenizer: BPETokenizer, loading_ratio, num_proc, splits):
             labels.append(item["label"])
         tokens = tokenizer.encode(
             sentences,
-            padding=True,
-            pad_value=tokenizer.token_to_id(PAD_TOKEN),
             verbose=False,
         )
-        return torch.tensor(tokens, dtype=torch.long), torch.tensor(
-            labels, dtype=torch.long
-        )
+        tensors = [torch.tensor(tok, dtype=torch.long) for tok in tokens]
+        return pad_sequence(
+            tensors, batch_first=True, padding_value=pad_idx
+        ), torch.tensor(labels, dtype=torch.long)
 
     dataset = datasets.load_dataset("stanfordnlp/sst2", num_proc=num_proc)
 

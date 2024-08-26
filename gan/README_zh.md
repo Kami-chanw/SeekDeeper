@@ -68,7 +68,7 @@
 \min_{\mathrm{G}}\mathbb{E}_{\mathrm{z\sim p_z}}\left[\log(1-\mathrm{D}(\mathrm{G}(\mathrm{z})))\right]
 ```
 
-其中，$G$ 是生成器，$D$ 是判别器，$x$ 是真实样本，$z$ 是随机噪声。
+其中， $G$ 是生成器， $D$ 是判别器， $x$ 是真实样本， $z$ 是随机噪声。
 
 判别器的目标是最大化对真实样本和生成样本的正确判定概率。
   
@@ -183,7 +183,7 @@ H_\text{out} = (H_\text{in}-1)\times \text{stride} + \text{kernel-size}-2\times\
 W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]
 ```
 
-其中，$\Pi(P_r, P_g)$ 是所有边际分布为 $P_r$ 和 $P_g$ 的联合分布的集合。Wasserstein 距离度量了将一个分布转换为另一个分布所需的最小工作量。
+其中， $\Pi(P_r, P_g)$ 是所有边际分布为 $P_r$ 和 $P_g$ 的联合分布的集合。Wasserstein 距离度量了将一个分布转换为另一个分布所需的最小工作量。
 
 为了计算这个式子，作者将其转换为
 
@@ -191,7 +191,7 @@ W(P_r,P_g)=\inf_{\gamma\in\Pi(P_r,P_g)}\mathbb{E}_{(x,y)\sim\gamma}[\|x-y\|]
 W(P_r,P_g)=\frac{1}{K}\sup_{\|f\|_L\leq K}\mathbb{E}_{x\sim P_r}\left[f(x)\right]-\mathbb{E}_{x\sim P_g}\left[f(x)\right]
 ```
 
-其中，$f(x)$ 是我们将要用判别器去拟合的 1-Lipschitz 函数，用于衡量样本 $x$ 的真实性；$K$ 是 1-Lipschitz 常数。
+其中， $f(x)$ 是我们将要用判别器去拟合的 1-Lipschitz 函数，用于衡量样本 $x$ 的真实性；$K$ 是 1-Lipschitz 常数。
 
 进一步地，我们使用参数 $w$ 来参数化所有的 $f_w(x)$，此时求解上式近似于求解
 
@@ -217,7 +217,7 @@ K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\ma
 \mathcal{L} = \mathbb{E}_{\tilde{x} \sim P_g} \left[D(G(z))\right] - \mathbb{E}_{x \sim P_r} \left[D(x)\right] + \lambda \mathbb{E}_{\hat{x} \sim P_{\hat{x}}} \left[\left(\|\nabla_{\hat{x}} D(\hat{x})\|_2 - 1\right)^2\right]
 ```
 
-其中，$\hat{x}$ 是生成数据和真实数据之间的线性插值样本，即 $\hat{x} = \alpha x + (1 - \alpha) G(z)$。
+其中， $\hat{x}$ 是生成数据和真实数据之间的线性插值样本，即 $\hat{x} = \alpha x + (1 - \alpha) G(z)$。
 
 #### 生成器结构
 
@@ -229,7 +229,7 @@ K\cdot W(P_r,P_g)\approx\max_{w:|f_w|_L\leq K}\mathbb{E}_{x\sim P_r}[f_w(x)]-\ma
 
 #### 训练策略
 相比原始GAN的训练流程，主要有以下几点改变：
-1. WGAN使用的是`RMSProp`、`SGD`这样的优化器，而WGAN-GP建议使用`Adam`优化器并设$\beta=(0, 0.9)$。
+1. WGAN使用的是`RMSProp`、`SGD`这样的优化器，而WGAN-GP建议使用`Adam`优化器并设 $\beta=(0, 0.9)$。
 2. 如果要在判别器中使用layer norm，给优化器设置`1e-3`的权重衰减会有一些提升。
 3. 每训练五次判别器再训练一次生成器。
 

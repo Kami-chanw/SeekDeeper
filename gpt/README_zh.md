@@ -97,14 +97,14 @@ BPE 是一种 tokenize 的方法，其核心思想是通过合并最频繁出现
 
 为了采样连续指定数量的 token sequence，我们需要先用 bpe 把原数据集的文本转换为 token id。而我们自己实现的 tokenize 速度非常慢，因此只能在小部分数据集上进行实验。如果你想要尝试更多的数据，可以修改 [pretrain.ipynb](./pretrain.ipynb) 中 `load_data` 的 `loading_ratio` 参数。
 
-## [Fine-tuning](./train.ipynb)  
+## [Fine-tuning](./finetune.ipynb)  
 在 BookCorpus 数据集上与训练后，GPT 已经获得了一定的语言能力，要将其运用到新的数据集上，只需要略微调整一下模型结构和输入即可。
 
 <div>  
   <img src="./images/gpt-train.png" alt="GPT architecture and training objectives used in other works" style="width: 100%; height: auto;">  
 </div>
 
-原论文中 Sec. 3.2 提到，添加 language modelling loss 作为微调的辅助目标有助于学习，因为 (a) 可以提高监督模型的泛化能力，(b) 可以加速收敛。因此除了要向词表中添加一些新的 tokens（`<pad>`、`<start>` 和 `<extract>`）之外，还需把 decoder 骨干的输出输入到一个新增的分类头中。
+原论文中 Sec. 3.2 提到，添加 language modelling loss 作为微调的辅助目标有助于学习，因为 (a) 可以提高监督模型的泛化能力，(b) 可以加速收敛。因此除了要向词表中添加一些新的 tokens（`<start>` 和 `<extract>`）之外，还需把 decoder 骨干的输出输入到一个新增的分类头中。
 
 微调基本重用预训练中的超参数设置。分类器之前添加 dropout 层（$p = 0.1$）。学习率用 $6.25e^{-5}$，批大小用 32。在大多数情况下，训练 3 个 epoch 就足够了。此外，还使用带 warmup 的线性学习率衰减策略，预热训练总轮数的 $0.2\%$。分类损失的权重设置为 0.5。
 

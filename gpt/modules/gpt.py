@@ -137,6 +137,7 @@ class GPT(nn.Module):
 
         # init a huggingface/transformers model
         model_hf = OpenAIGPTLMHeadModel.from_pretrained(model_name_or_path)
+        model_hf.resize_token_embeddings(default_config["vocab_size"])
         sd_hf = model_hf.state_dict()
 
         # copy while ensuring all of the parameters are aligned and match in names and shapes
@@ -144,30 +145,12 @@ class GPT(nn.Module):
         ignored_suffix = [
             ".attn.bias",  # buffer
             ".attn.masked_bias",  # mask
-            # we should process lm_head and tokens_embed separately
-            # because they may have different shapes from vanilla GPT
-            "lm_head.weight",
-            "tokens_embed.weight",
         ]
         sd_keys_hf = [
             k
             for k in sd_keys_hf
             if all(not k.endswith(suffix) for suffix in ignored_suffix)
         ]  # ignore these
-
-        # we only need to copy tokens_embed.weight
-        # because lm_head and tokens are sharing weights
-        # due to the initialization ordering (we initialize tokens_embed before lm_head in __init__),
-        # we must copy tokens_embed.weight instead of lm_head.weight
-        assert (
-            model.transformer.tokens_embed.weight.shape
-            >= sd_hf["transformer.tokens_embed.weight"].shape
-        )
-        vocab_size_hf, d_model = sd_hf["transformer.tokens_embed.weight"].shape
-        with torch.no_grad():
-            model.transformer.tokens_embed.weight[:vocab_size_hf].copy_(
-                sd_hf["transformer.tokens_embed.weight"]
-            )
 
         # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
         # this means that we have to transpose these weights when we import them
@@ -212,6 +195,11 @@ class GPT(nn.Module):
             pos
         )  # position embeddings of shape (t, d_model)
         x = self.transformer.drop(tok_emb + pos_emb)
+
+        if input_mask is not None and input_mask.dim() == 2:
+            # [batch_size, seq_len] -> [batch_size, 1, 1, seq_len]
+            input_mask = input_mask.unsqueeze(1).unsqueeze(2)
+
         for block in self.transformer.h:
             x = block(x, input_mask)
 
@@ -232,7 +220,7 @@ class GPT(nn.Module):
             idx_cond = idx if idx.size(1) <= self.max_len else idx[:, -self.max_len :]
             # forward the model to get the logits for the index in the sequence
             logits = self(idx_cond)
-            # only take the first output, i.e. lm_output
+            # only take the first output, i.e. lm_logits
             if isinstance(logits, (tuple, list)):
                 logits = logits[0]
             # pluck the logits at the final step and scale by desired temperature
@@ -260,8 +248,8 @@ class GPTClassifier(GPT):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, input_mask=None):
-        lm_output, hidden_states = super().forward(
+        lm_logits, hidden_states = super().forward(
             input, input_mask=input_mask, return_hiden_states=True
         )
-        clf_output = self.clf_head(self.dropout(hidden_states[:, -1]))
-        return lm_output, clf_output
+        clf_logits = self.clf_head(self.dropout(hidden_states[:, -1]))
+        return lm_logits, clf_logits

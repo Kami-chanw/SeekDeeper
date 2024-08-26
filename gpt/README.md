@@ -97,14 +97,14 @@ Based on the setup in [Improving Language Understanding by Generative Pre-Traini
 
 To sample the specified number of continuous token sequences, we need to first convert the text in the original dataset to token ids using bpe. However, our custom tokenization implementation is very slow, so experiments are conducted on a small portion of the dataset. If you wish to try more data, you can modify the `loading_ratio` parameter in `load_data` within [pretrain.ipynb](./pretrain.ipynb).
 
-## [Fine-tuning](./train.ipynb)  
+## [Fine-tuning](./finetune.ipynb)  
 After training on the BookCorpus dataset, GPT has gained a certain level of language ability. To apply it to a new dataset, only minor adjustments to the model structure and input are needed.
 
 <div>  
   <img src="./images/gpt-train.png" alt="GPT architecture and training objectives used in other works" style="width: 100%; height: auto;">  
 </div>
 
-In Sec. 3.2 of the original paper, it is mentioned that adding a language modeling loss as an auxiliary objective during fine-tuning helps learning because (a) it improves the generalization ability of the supervised model, and (b) it accelerates convergence. Therefore, in addition to adding new tokens (`<pad>`, `<start>`, and `<extract>`) to the vocabulary, the output of the decoder backbone needs to be fed into a newly added classification head.
+In Sec. 3.2 of the original paper, it is mentioned that adding a language modeling loss as an auxiliary objective during fine-tuning helps learning because (a) it improves the generalization ability of the supervised model, and (b) it accelerates convergence. Therefore, in addition to adding new tokens (`<start>`, and `<extract>`) to the vocabulary, the output of the decoder backbone needs to be fed into a newly added classification head.
 
 Fine-tuning generally reuses the hyperparameter settings from pre-training. A dropout layer ($p = 0.1$) is added before the classifier. The learning rate is set to $6.25e^{-5}$, and the batch size is set to 32. In most cases, training for 3 epochs is sufficient. Additionally, a linear learning rate decay strategy with warmup is used, with a warmup proportion of $0.2\%$ of the total training steps. The weight of the classification loss is set to 0.5.
 
