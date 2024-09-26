@@ -78,7 +78,7 @@ Decoder 同样包含多个相同的层，Encoder 最后一层的输出 `enc` 和
 ```python
 # causal self-attention
 residual = dec
-x = multihead_attention(q=dec, k=dec, v=dec, mask=tgt_mask)
+x = multihead_attention(q=dec, k=dec, v=dec, mask=src_mask)
 x = layer_norm(x + residual)
 
 # cross-attention

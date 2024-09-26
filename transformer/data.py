@@ -22,7 +22,7 @@ special_tokens = [SOS_TOKEN, EOS_TOKEN, PAD_TOKEN, UNK_TOKEN]
 def build_tokenizer(dataset, lang, force_reload):
     tokenizer_path = config.dataset_dir / f"tokenizer-{lang}.json"
     if os.path.exists(tokenizer_path) and not force_reload:
-        tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN)).from_file(tokenizer_path)
+        tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN)).from_file(str(tokenizer_path))
     else:
         tokenizer = Tokenizer(BPE(unk_token=UNK_TOKEN))
         tokenizer.pre_tokenizer = Whitespace()
@@ -33,7 +33,8 @@ def build_tokenizer(dataset, lang, force_reload):
 
         def batch_iterator():
             for i in range(0, dataset["train"].num_rows, config.batch_size):
-                yield dataset["train"][i : i + config.batch_size][lang]
+                batch = dataset["train"][i : i + config.batch_size]["translation"]
+                yield [item[lang] for item in batch]
 
         tokenizer.train_from_iterator(batch_iterator(), trainer)
         tokenizer.enable_padding(
@@ -48,7 +49,7 @@ def build_tokenizer(dataset, lang, force_reload):
                 (EOS_TOKEN, tokenizer.token_to_id(EOS_TOKEN)),
             ],
         )
-        tokenizer.save(tokenizer_path)
+        tokenizer.save(str(tokenizer_path))
     return tokenizer
 
 
@@ -86,8 +87,8 @@ def load_data(
     def collate_fn(batch):
         src_batch, tgt_batch = [], []
         for item in batch:
-            src_batch.append(item[src_lang])
-            tgt_batch.append(item[tgt_lang])
+            src_batch.append(item["translation"][src_lang])
+            tgt_batch.append(item["translation"][tgt_lang])
 
         src_batch = src_tokenizer.encode_batch(src_batch)
         tgt_batch = tgt_tokenizer.encode_batch(tgt_batch)

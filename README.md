@@ -67,7 +67,7 @@ For each model, the typical directory structure is as follows:
 - **checkpoints/**: Contains pre-trained model weights for direct use in `inference.ipynb`. Sometimes, pre-trained parameters from official repositories are loaded directly.
 - **modules/**: Contains modules necessary for model implementation.
 - **datasets/**: Contains datasets required for training or inference validation, which may sometimes be downloaded to this directory via code.
-- **images/**: Contains datasets required for training or inference validation, which may sometimes be downloaded to this directory via code.
+- **images/**: Contains images for README.md of this model.
 - **README.md**: Introduces the implemented task and describes the implementation details.
 - **data.py**: Defines `Dataset`, `Dataloader`, or data preprocessing.
 - **config.py**: Defines hyperparameters needed for the experiment.
