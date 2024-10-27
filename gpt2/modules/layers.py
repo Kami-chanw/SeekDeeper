@@ -57,7 +57,7 @@ class Attention(nn.Module):
                 k,
                 v,
                 attn_mask=casual_mask,
-                dropout_p=self.dropout if self.training else 0,
+                dropout_p=self.dropout if self.training else 0.0,
             )
         else:
             # manual implementation of attention
